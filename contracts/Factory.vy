@@ -1,4 +1,4 @@
-# @version 0.2.16
+# @version 0.3.0
 """
 @title Curve Sidechain/L2 Factory
 @license MIT
@@ -25,16 +25,6 @@ struct BasePoolArray:
     asset_type: uint256
 
 
-interface AddressProvider:
-    def admin() -> address: view
-    def get_registry() -> address: view
-
-interface Registry:
-    def get_lp_token(pool: address) -> address: view
-    def get_n_coins(pool: address) -> uint256: view
-    def get_coins(pool: address) -> address[MAX_COINS]: view
-    def get_pool_from_lp_token(lp_token: address) -> address: view
-
 interface ERC20:
     def balanceOf(_addr: address) -> uint256: view
     def decimals() -> uint256: view
@@ -55,6 +45,7 @@ interface CurvePool:
     def A() -> uint256: view
     def fee() -> uint256: view
     def admin_fee() -> uint256: view
+    def coins(i: uint256) -> address: view
     def balances(i: uint256) -> uint256: view
     def admin_balances(i: uint256) -> uint256: view
     def get_virtual_price() -> uint256: view
@@ -74,16 +65,6 @@ interface CurvePool:
         _receiver: address,
     ) -> uint256: nonpayable
 
-interface CurveFactoryMetapool:
-    def coins(i :uint256) -> address: view
-    def decimals() -> uint256: view
-
-interface OldFactory:
-    def get_coins(_pool: address) -> address[2]: view
-
-interface LiquidityGauge:
-    def initialize(_lp_token: address): nonpayable
-
 
 event BasePoolAdded:
     base_pool: address
@@ -101,14 +82,9 @@ event MetaPoolDeployed:
     fee: uint256
     deployer: address
 
-event LiquidityGaugeDeployed:
-    pool: address
-    gauge: address
-
 
 MAX_COINS: constant(int128) = 8
 MAX_PLAIN_COINS: constant(int128) = 4  # max coins in a plain pool
-ADDRESS_PROVIDER: constant(address) = 0x0000000022D53366457F9d5E68Ec105046FC4383
 
 admin: public(address)
 future_admin: public(address)
@@ -129,8 +105,6 @@ plain_implementations: public(HashMap[uint256, address[10]])
 
 # fee receiver for plain pools
 fee_receiver: public(address)
-
-gauge_implementation: public(address)
 
 # mapping of coins -> pools for trading
 # a mapping key is generated for each pair of addresses via
@@ -437,18 +411,6 @@ def get_coin_indices(
 
 @view
 @external
-def get_gauge(_pool: address) -> address:
-    """
-    @notice Get the address of the liquidity gauge contract for a factory pool
-    @dev Returns `ZERO_ADDRESS` if a gauge has not been deployed
-    @param _pool Pool address
-    @return Implementation contract address
-    """
-    return self.pool_data[_pool].liquidity_gauge
-
-
-@view
-@external
 def get_implementation_address(_pool: address) -> address:
     """
     @notice Get the address of the implementation contract used for a factory pool
@@ -677,31 +639,13 @@ def deploy_metapool(
     return pool
 
 
-@external
-def deploy_gauge(_pool: address) -> address:
-    """
-    @notice Deploy a liquidity gauge for a factory pool
-    @param _pool Factory pool address to deploy a gauge for
-    @return Address of the deployed gauge
-    """
-    assert self.pool_data[_pool].coins[0] != ZERO_ADDRESS, "Unknown pool"
-    assert self.pool_data[_pool].liquidity_gauge == ZERO_ADDRESS, "Gauge already deployed"
-    implementation: address = self.gauge_implementation
-    assert implementation != ZERO_ADDRESS, "Gauge implementation not set"
-
-    gauge: address = create_forwarder_to(implementation)
-    LiquidityGauge(gauge).initialize(_pool)
-    self.pool_data[_pool].liquidity_gauge = gauge
-
-    log LiquidityGaugeDeployed(_pool, gauge)
-    return gauge
-
-
 # <--- Admin / Guarded Functionality --->
 
 @external
 def add_base_pool(
     _base_pool: address,
+    _lp_token: address,
+    _n_coins: uint256,
     _fee_receiver: address,
     _asset_type: uint256,
     _implementations: address[10],
@@ -716,17 +660,14 @@ def add_base_pool(
     """
     assert msg.sender == self.admin  # dev: admin-only function
     assert self.base_pool_data[_base_pool].coins[0] == ZERO_ADDRESS  # dev: pool exists
-
-    registry: address = AddressProvider(ADDRESS_PROVIDER).get_registry()
-    n_coins: uint256 = Registry(registry).get_n_coins(_base_pool)
-    assert n_coins > 0  # dev: pool not in registry
+    assert _n_coins > 0
 
     # add pool to pool_list
     length: uint256 = self.base_pool_count
     self.base_pool_list[length] = _base_pool
     self.base_pool_count = length + 1
-    self.base_pool_data[_base_pool].lp_token = Registry(registry).get_lp_token(_base_pool)
-    self.base_pool_data[_base_pool].n_coins = n_coins
+    self.base_pool_data[_base_pool].lp_token = _lp_token
+    self.base_pool_data[_base_pool].n_coins = _n_coins
     self.base_pool_data[_base_pool].fee_receiver = _fee_receiver
     if _asset_type != 0:
         self.base_pool_data[_base_pool].asset_type = _asset_type
@@ -738,11 +679,10 @@ def add_base_pool(
         self.base_pool_data[_base_pool].implementations[i] = implementation
 
     decimals: uint256 = 0
-    coins: address[MAX_COINS] = Registry(registry).get_coins(_base_pool)
     for i in range(MAX_COINS):
-        if i == n_coins:
+        if i == _n_coins:
             break
-        coin: address = coins[i]
+        coin: address = CurvePool(_base_pool).coins(i)
         self.base_pool_data[_base_pool].coins[i] = coin
         decimals += shift(ERC20(coin).decimals(), convert(i*8, int128))
     self.base_pool_data[_base_pool].decimals = decimals
@@ -789,22 +729,6 @@ def set_plain_implementations(
                 break
         else:
             self.plain_implementations[_n_coins][i] = new_imp
-
-
-@external
-def set_gauge_implementation(_gauge_implementation: address):
-    assert msg.sender == self.admin  # dev: admin-only function
-
-    self.gauge_implementation = _gauge_implementation
-
-
-@external
-def set_gauge(_pool: address, _gauge: address):
-    assert msg.sender == self.admin  # dev: admin-only function
-    assert self.pool_data[_pool].coins[0] != ZERO_ADDRESS, "Unknown pool"
-
-    self.pool_data[_pool].liquidity_gauge = _gauge
-    log LiquidityGaugeDeployed(_pool, _gauge)
 
 
 @external
