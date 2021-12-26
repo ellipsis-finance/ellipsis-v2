@@ -32,9 +32,8 @@ interface ERC20:
     def approve(_spender: address, _amount: uint256): nonpayable
 
 interface CurvePlainPool:
-    def initialize(
-        _name: String[32],
-        _symbol: String[10],
+   def initialize(
+        _lp_token: address,
         _coins: address[4],
         _rate_multipliers: uint256[4],
         _A: uint256,
@@ -50,8 +49,7 @@ interface CurvePool:
     def admin_balances(i: uint256) -> uint256: view
     def get_virtual_price() -> uint256: view
     def initialize(
-        _name: String[32],
-        _symbol: String[10],
+        _lp_token: address,
         _coin: address,
         _rate_multiplier: uint256,
         _A: uint256,
@@ -544,9 +542,9 @@ def deploy_plain_pool(
     implementation: address = self.plain_implementations[n_coins][_implementation_idx]
     assert implementation != ZERO_ADDRESS, "Invalid implementation index"
     pool: address = create_forwarder_to(implementation)
-    CurvePlainPool(pool).initialize(_name, _symbol, _coins, rate_multipliers, _A, _fee)
-
     token: address = create_forwarder_to(self.token_implementation)
+
+    CurvePlainPool(pool).initialize(token, _coins, rate_multipliers, _A, _fee)
     LpToken(token).initialize(_name, _symbol, pool)
 
     length: uint256 = self.pool_count
@@ -630,11 +628,11 @@ def deploy_metapool(
     assert decimals < 19, "Max 18 decimals for coins"
 
     pool: address = create_forwarder_to(implementation)
-    CurvePool(pool).initialize(_name, _symbol, _coin, 10 ** (36 - decimals), _A, _fee)
-    ERC20(_coin).approve(pool, MAX_UINT256)
-
     token: address = create_forwarder_to(self.token_implementation)
+
+    CurvePool(pool).initialize(token, _coin, 10 ** (36 - decimals), _A, _fee)
     LpToken(token).initialize(_name, _symbol, pool)
+    ERC20(_coin).approve(pool, MAX_UINT256)
 
     # add pool to pool_list
     length: uint256 = self.pool_count
