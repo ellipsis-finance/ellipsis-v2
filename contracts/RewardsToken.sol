@@ -4,14 +4,18 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+
+interface IFactory {
+    function admin() external view returns (address);
+}
 
 
 // LP Token with rewards capability for http://ellipsis.finance/
 // ERC20 that represents a deposit into an Ellipsis pool and allows 3rd-party incentives for token holders
 // Based on SNX MultiRewards by iamdefinitelyahuman - https://github.com/iamdefinitelyahuman/multi-rewards
-contract RewardsToken is ReentrancyGuard, Ownable {
+contract RewardsToken is ReentrancyGuard {
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -25,6 +29,7 @@ contract RewardsToken is ReentrancyGuard, Ownable {
 
     address public lpStaker;
     address public minter;
+    IFactory public factory;
 
     struct Reward {
         address rewardsDistributor;
@@ -58,16 +63,23 @@ contract RewardsToken is ReentrancyGuard, Ownable {
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(
+    constructor() {
+        // prevent the implementation contract from being used as a token
+        minter = address(31337);
+    }
+
+    function initialize(
         string memory _name,
         string memory _symbol,
-        address _lpStaker
+        address _minter
     )
-        public Ownable()
+        external
     {
+        require(minter == address(0));
         name = _name;
         symbol = _symbol;
-        lpStaker = _lpStaker;
+        minter = _minter;
+        factory = IFactory(msg.sender);
         emit Transfer(address(0), msg.sender, 0);
     }
 
@@ -91,12 +103,12 @@ contract RewardsToken is ReentrancyGuard, Ownable {
         rewardData[_rewardsToken].rewardsDistributor = _rewardsDistributor;
     }
 
-    function setMinter(address _minter) external {
-        require(minter == address(0));
-        minter = _minter;
-    }
-
     /* ========== MODIFIERS ========== */
+
+    modifier onlyOwner() {
+        require(msg.sender == owner());
+        _;
+    }
 
     modifier updateReward(address payable[2] memory accounts) {
         address _lpStaker = lpStaker;
@@ -116,6 +128,10 @@ contract RewardsToken is ReentrancyGuard, Ownable {
     }
 
     /* ========== VIEWS ========== */
+
+    function owner() public view returns (address) {
+        return factory.admin();
+    }
 
     function lastTimeRewardApplicable(address _rewardsToken) public view returns (uint256) {
         return Math.min(block.timestamp, rewardData[_rewardsToken].periodFinish);
@@ -237,7 +253,7 @@ contract RewardsToken is ReentrancyGuard, Ownable {
     // Added to support recovering LP Rewards from other systems such as BAL to be distributed to holders
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
         require(rewardData[tokenAddress].lastUpdateTime == 0, "Cannot withdraw reward token");
-        IERC20(tokenAddress).safeTransfer(owner(), tokenAmount);
+        IERC20(tokenAddress).safeTransfer(msg.sender, tokenAmount);
         emit Recovered(tokenAddress, tokenAmount);
     }
 
