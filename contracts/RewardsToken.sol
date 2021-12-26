@@ -27,7 +27,6 @@ contract RewardsToken is ReentrancyGuard {
     uint256 public constant decimals = 18;
     uint256 public totalSupply;
 
-    address public lpStaker;
     address public minter;
     IFactory public factory;
 
@@ -48,6 +47,8 @@ contract RewardsToken is ReentrancyGuard {
 
     mapping(address => uint256) public balanceOf;
     mapping(address => uint256) public depositedBalanceOf;
+
+    mapping(address => bool) public depositContracts;
 
     // owner -> spender -> amount
     mapping(address => mapping(address => uint256)) public allowance;
@@ -80,7 +81,7 @@ contract RewardsToken is ReentrancyGuard {
         symbol = _symbol;
         minter = _minter;
         factory = IFactory(msg.sender);
-        emit Transfer(address(0), msg.sender, 0);
+        emit Transfer(address(0), _minter, 0);
     }
 
     /* ========== ADMIN FUNCTIONS ========== */
@@ -103,6 +104,11 @@ contract RewardsToken is ReentrancyGuard {
         rewardData[_rewardsToken].rewardsDistributor = _rewardsDistributor;
     }
 
+    function setDepositContract(address _account, bool _isDepositContract) external onlyOwner {
+        require(balanceOf[_account] == 0, "Address has a balance");
+        depositContracts[_account] = _isDepositContract;
+    }
+
     /* ========== MODIFIERS ========== */
 
     modifier onlyOwner() {
@@ -111,7 +117,6 @@ contract RewardsToken is ReentrancyGuard {
     }
 
     modifier updateReward(address payable[2] memory accounts) {
-        address _lpStaker = lpStaker;
         for (uint i; i < rewardTokens.length; i++) {
             address token = rewardTokens[i];
             rewardData[token].rewardPerTokenStored = rewardPerToken(token);
@@ -119,7 +124,7 @@ contract RewardsToken is ReentrancyGuard {
             for (uint x = 0; x < accounts.length; x++) {
                 address account = accounts[x];
                 if (account == address(0)) break;
-                if (account == _lpStaker) continue;
+                if (depositContracts[account]) continue;
                 rewards[account][token] = earned(account, token);
                 userRewardPerTokenPaid[account][token] = rewardData[token].rewardPerTokenStored;
             }
@@ -149,7 +154,7 @@ contract RewardsToken is ReentrancyGuard {
     }
 
     function earned(address account, address _rewardsToken) public view returns (uint256) {
-        if (account == lpStaker) return 0;
+        if (depositContracts[account]) return 0;
         uint256 balance = balanceOf[account].add(depositedBalanceOf[account]);
         uint256 perToken = rewardPerToken(_rewardsToken).sub(userRewardPerTokenPaid[account][_rewardsToken]);
         return balance.mul(perToken).div(1e18).add(rewards[account][_rewardsToken]);
@@ -180,11 +185,13 @@ contract RewardsToken is ReentrancyGuard {
         balanceOf[_from] = balanceOf[_from].sub(_value);
         balanceOf[_to] = balanceOf[_to].add(_value);
 
-        // for transfers into or out of LpTokenStaker, modify depositedBalance
-        if (_to == lpStaker) {
-            depositedBalanceOf[_from] = depositedBalanceOf[_from].add(_value);
-        } else if (_from == lpStaker) {
+        if (depositContracts[_from]) {
+            require(!depositContracts[_to], "Cannot transfer between deposit contracts");
+            require(_from == msg.sender, "Cannot use transferFrom on a deposit contract");
             depositedBalanceOf[_to] = depositedBalanceOf[_to].sub(_value);
+        } else if (depositContracts[_to]) {
+            require(_to == msg.sender, "Deposit contract must call transferFrom to receive tokens");
+            depositedBalanceOf[_from] = depositedBalanceOf[_from].add(_value);
         }
         emit Transfer(_from, _to, _value);
     }
