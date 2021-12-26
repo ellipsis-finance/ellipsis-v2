@@ -8,8 +8,8 @@
 
 struct PoolArray:
     base_pool: address
-    implementation: address
-    liquidity_gauge: address
+    pool_implementation: address
+    token_implementation: address
     coins: address[MAX_PLAIN_COINS]
     decimals: uint256[MAX_PLAIN_COINS]
     n_coins: uint256
@@ -65,18 +65,29 @@ interface CurvePool:
         _receiver: address,
     ) -> uint256: nonpayable
 
+interface LpToken:
+    def initialize(
+        _name: String[32],
+        _symbol: String[10],
+        _minter: address,
+    ): nonpayable
+
 
 event BasePoolAdded:
     base_pool: address
 
 event PlainPoolDeployed:
+    pool: address
+    lp_token: address
     coins: address[MAX_PLAIN_COINS]
     A: uint256
     fee: uint256
     deployer: address
 
 event MetaPoolDeployed:
-    coin: address
+    pool: address
+    lp_token: address
+    coins: address[2]
     base_pool: address
     A: uint256
     fee: uint256
@@ -103,6 +114,8 @@ base_pool_data: HashMap[address, BasePoolArray]
 # are organized according to the number of coins in the pool
 plain_implementations: public(HashMap[uint256, address[10]])
 
+token_implementation: public(address)
+
 # fee receiver for plain pools
 fee_receiver: public(address)
 
@@ -112,11 +125,18 @@ fee_receiver: public(address)
 markets: HashMap[uint256, address[4294967296]]
 market_counts: HashMap[uint256, uint256]
 
+# lp token -> pool
+get_pool_from_lp_token: public(HashMap[address, address])
+
+# pool -> lp token
+get_lp_token: public(HashMap[address, address])
+
 
 @external
-def __init__(_fee_receiver: address):
+def __init__(_token_implementation: address, _fee_receiver: address):
     self.admin = msg.sender
     self.manager = msg.sender
+    self.token_implementation = _token_implementation
     self.fee_receiver = _fee_receiver
 
 
@@ -411,13 +431,13 @@ def get_coin_indices(
 
 @view
 @external
-def get_implementation_address(_pool: address) -> address:
+def get_implementation_addresses(_pool: address) -> (address, address):
     """
     @notice Get the address of the implementation contract used for a factory pool
     @param _pool Pool address
     @return Implementation contract address
     """
-    return self.pool_data[_pool].implementation
+    return self.pool_data[_pool].pool_implementation, self.pool_data[_pool].token_implementation
 
 
 @view
@@ -526,13 +546,19 @@ def deploy_plain_pool(
     pool: address = create_forwarder_to(implementation)
     CurvePlainPool(pool).initialize(_name, _symbol, _coins, rate_multipliers, _A, _fee)
 
+    token: address = create_forwarder_to(self.token_implementation)
+    LpToken(token).initialize(_name, _symbol, pool)
+
     length: uint256 = self.pool_count
     self.pool_list[length] = pool
     self.pool_count = length + 1
+    self.get_lp_token[pool] = token
+    self.get_pool_from_lp_token[token] = pool
     self.pool_data[pool].decimals = decimals
     self.pool_data[pool].n_coins = n_coins
     self.pool_data[pool].base_pool = ZERO_ADDRESS
-    self.pool_data[pool].implementation = implementation
+    self.pool_data[pool].pool_implementation = implementation
+    self.pool_data[pool].token_implementation = self.token_implementation
     if _asset_type != 0:
         self.pool_data[pool].asset_type = _asset_type
 
@@ -557,7 +583,7 @@ def deploy_plain_pool(
                 self.markets[key][length] = pool
                 self.market_counts[key] = length + 1
 
-    log PlainPoolDeployed(_coins, _A, _fee, msg.sender)
+    log PlainPoolDeployed(pool, token, _coins, _A, _fee, msg.sender)
     return pool
 
 
@@ -607,10 +633,15 @@ def deploy_metapool(
     CurvePool(pool).initialize(_name, _symbol, _coin, 10 ** (36 - decimals), _A, _fee)
     ERC20(_coin).approve(pool, MAX_UINT256)
 
+    token: address = create_forwarder_to(self.token_implementation)
+    LpToken(token).initialize(_name, _symbol, pool)
+
     # add pool to pool_list
     length: uint256 = self.pool_count
     self.pool_list[length] = pool
     self.pool_count = length + 1
+    self.get_lp_token[pool] = token
+    self.get_pool_from_lp_token[token] = pool
 
     base_lp_token: address = self.base_pool_data[_base_pool].lp_token
 
@@ -618,8 +649,9 @@ def deploy_metapool(
     self.pool_data[pool].n_coins = 2
     self.pool_data[pool].base_pool = _base_pool
     self.pool_data[pool].coins[0] = _coin
-    self.pool_data[pool].coins[1] = self.base_pool_data[_base_pool].lp_token
-    self.pool_data[pool].implementation = implementation
+    self.pool_data[pool].coins[1] = base_lp_token
+    self.pool_data[pool].pool_implementation = implementation
+    self.pool_data[pool].token_implementation = self.token_implementation
 
     is_finished: bool = False
     for i in range(MAX_COINS):
@@ -635,7 +667,7 @@ def deploy_metapool(
         if is_finished:
             break
 
-    log MetaPoolDeployed(_coin, _base_pool, _A, _fee, msg.sender)
+    log MetaPoolDeployed(pool, token, [_coin, base_lp_token], _base_pool, _A, _fee, msg.sender)
     return pool
 
 
@@ -729,6 +761,13 @@ def set_plain_implementations(
                 break
         else:
             self.plain_implementations[_n_coins][i] = new_imp
+
+
+@external
+def set_token_implementation(_token_implementation: address):
+    assert msg.sender == self.admin
+
+    self.token_implementation = _token_implementation
 
 
 @external
