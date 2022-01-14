@@ -18,7 +18,6 @@ struct PoolArray:
 struct BasePoolArray:
     implementations: address[10]
     lp_token: address
-    fee_receiver: address
     coins: address[MAX_COINS]
     decimals: uint256
     n_coins: uint256
@@ -59,8 +58,7 @@ interface CurvePool:
         i: int128,
         j: int128,
         dx: uint256,
-        min_dy: uint256,
-        _receiver: address,
+        min_dy: uint256
     ) -> uint256: nonpayable
 
 interface LpToken:
@@ -69,6 +67,9 @@ interface LpToken:
         _symbol: String[10],
         _minter: address,
     ): nonpayable
+
+interface FeeDistributor:
+    def depositFee(_token: address, _amount: uint256) -> bool: nonpayable
 
 
 event BasePoolAdded:
@@ -465,16 +466,6 @@ def get_pool_asset_type(_pool: address) -> uint256:
         return self.base_pool_data[base_pool].asset_type
 
 
-@view
-@external
-def get_fee_receiver(_pool: address) -> address:
-    base_pool: address = self.pool_data[_pool].base_pool
-    if base_pool == ZERO_ADDRESS:
-        return self.fee_receiver
-    else:
-        return self.base_pool_data[base_pool].fee_receiver
-
-
 # <--- Pool Deployers --->
 
 @external
@@ -676,7 +667,6 @@ def add_base_pool(
     _base_pool: address,
     _lp_token: address,
     _n_coins: uint256,
-    _fee_receiver: address,
     _asset_type: uint256,
     _implementations: address[10],
 ):
@@ -684,7 +674,6 @@ def add_base_pool(
     @notice Add a base pool to the registry, which may be used in factory metapools
     @dev Only callable by admin
     @param _base_pool Pool address to add
-    @param _fee_receiver Admin fee receiver address for metapools using this base pool
     @param _asset_type Asset type for pool, as an integer  0 = USD, 1 = ETH, 2 = BTC, 3 = Other
     @param _implementations List of implementation addresses that can be used with this base pool
     """
@@ -698,7 +687,6 @@ def add_base_pool(
     self.base_pool_count = length + 1
     self.base_pool_data[_base_pool].lp_token = _lp_token
     self.base_pool_data[_base_pool].n_coins = _n_coins
-    self.base_pool_data[_base_pool].fee_receiver = _fee_receiver
     if _asset_type != 0:
         self.base_pool_data[_base_pool].asset_type = _asset_type
 
@@ -819,18 +807,14 @@ def set_manager(_manager: address):
 
 
 @external
-def set_fee_receiver(_base_pool: address, _fee_receiver: address):
+def set_fee_receiver(_fee_receiver: address):
     """
     @notice Set fee receiver for base and plain pools
-    @param _base_pool Address of base pool to set fee receiver for.
-                      For plain pools, leave as `ZERO_ADDRESS`.
     @param _fee_receiver Address that fees are sent to
     """
     assert msg.sender == self.admin  # dev: admin only
-    if _base_pool == ZERO_ADDRESS:
-        self.fee_receiver = _fee_receiver
-    else:
-        self.base_pool_data[_base_pool].fee_receiver = _fee_receiver
+
+    self.fee_receiver = _fee_receiver
 
 
 @external
@@ -842,10 +826,14 @@ def convert_metapool_fees() -> bool:
     """
     base_pool: address = self.pool_data[msg.sender].base_pool
     assert base_pool != ZERO_ADDRESS  # dev: sender must be metapool
+
     coin: address = self.pool_data[msg.sender].coins[0]
-
     amount: uint256 = ERC20(coin).balanceOf(self)
-    receiver: address = self.base_pool_data[base_pool].fee_receiver
+    CurvePool(msg.sender).exchange(0, 1, amount, 0)
 
-    CurvePool(msg.sender).exchange(0, 1, amount, 0, receiver)
+    coin = self.pool_data[msg.sender].coins[1]
+    amount = ERC20(coin).balanceOf(self)
+    ERC20(coin).approve(self.fee_receiver, amount)
+    FeeDistributor(self.fee_receiver).depositFee(coin, amount)
+
     return True

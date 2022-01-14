@@ -24,7 +24,6 @@ interface Curve:
 
 interface Factory:
     def convert_metapool_fees() -> bool: nonpayable
-    def get_fee_receiver(_pool: address) -> address: view
     def admin() -> address: view
 
 interface CurveToken:
@@ -997,28 +996,21 @@ def admin_balances(i: uint256) -> uint256:
 
 @external
 def withdraw_admin_fees():
-    # transfer coin 0 to Factory and call `convert_fees` to swap it for coin 1
     factory: address = self.factory
-    coin: address = self.coins[0]
-    amount: uint256 = ERC20(coin).balanceOf(self) - self.balances[0]
-    if amount > 0:
-        response: Bytes[32] = raw_call(
-            coin,
-            concat(
-                method_id("transfer(address,uint256)"),
-                convert(factory, bytes32),
-                convert(amount, bytes32),
-            ),
-            max_outsize=32,
-        )
-        if len(response) > 0:
-            assert convert(response, bool)
-        Factory(factory).convert_metapool_fees()
+    for i in range(2):
+        coin: address = self.coins[i]
+        amount: uint256 = ERC20(coin).balanceOf(self) - self.balances[i]
+        if amount > 0:
+            response: Bytes[32] = raw_call(
+                coin,
+                concat(
+                    method_id("transfer(address,uint256)"),
+                    convert(factory, bytes32),
+                    convert(amount, bytes32),
+                ),
+                max_outsize=32,
+            )
+            if len(response) > 0:
+                assert convert(response, bool)
 
-    # transfer coin 1 to the receiver
-    coin = self.coins[1]
-    amount = ERC20(coin).balanceOf(self) - self.balances[1]
-    if amount > 0:
-        receiver: address = Factory(factory).get_fee_receiver(self)
-        ERC20(coin).approve(receiver, amount)
-        FeeDistributor(receiver).depositFee(coin, amount)
+    Factory(factory).convert_metapool_fees()
