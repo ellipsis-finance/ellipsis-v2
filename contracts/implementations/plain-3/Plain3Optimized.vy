@@ -10,7 +10,7 @@
 from vyper.interfaces import ERC20
 
 interface Factory:
-    def get_fee_receiver(_pool: address) -> address: view
+    def fee_receiver() -> address: view
     def admin() -> address: view
 
 interface CurveToken:
@@ -708,7 +708,7 @@ def admin_balances(i: uint256) -> uint256:
 
 @external
 def withdraw_admin_fees():
-    receiver: address = Factory(self.factory).get_fee_receiver(self)
+    receiver: address = Factory(self.factory).fee_receiver()
 
     for i in range(N_COINS):
         coin: address = self.coins[i]

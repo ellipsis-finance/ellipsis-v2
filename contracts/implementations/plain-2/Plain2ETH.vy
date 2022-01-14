@@ -13,7 +13,7 @@ interface ERC20:
     def balanceOf(_owner: address) -> uint256: view
 
 interface Factory:
-    def get_fee_receiver(_pool: address) -> address: view
+    def fee_receiver() -> address: view
     def admin() -> address: view
 
 interface CurveToken:
@@ -819,7 +819,7 @@ def admin_balances(i: uint256) -> uint256:
 
 @external
 def withdraw_admin_fees():
-    receiver: address = Factory(self.factory).get_fee_receiver(self)
+    receiver: address = Factory(self.factory).fee_receiver()
 
     fees: uint256 = self.balance - self.balances[0]
     raw_call(receiver, b"", value=fees)
