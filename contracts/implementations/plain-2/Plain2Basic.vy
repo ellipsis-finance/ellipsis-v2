@@ -7,10 +7,11 @@
 @dev ERC20 support for return True/revert, return True/False, return None
 """
 
-from vyper.interfaces import ERC20
+interface ERC20:
+    def approve(_spender: address, _amount: uint256): nonpayable
+    def balanceOf(_owner: address) -> uint256: view
 
 interface Factory:
-    def convert_fees() -> bool: nonpayable
     def get_fee_receiver(_pool: address) -> address: view
     def admin() -> address: view
 
@@ -18,6 +19,9 @@ interface CurveToken:
     def totalSupply() -> uint256: view
     def mint(_to: address, _value: uint256) -> bool: nonpayable
     def burnFrom(_to: address, _value: uint256) -> bool: nonpayable
+
+interface FeeDistributor:
+    def depositFee(_token: address, _amount: uint256) -> bool: nonpayable
 
 
 event TokenExchange:
@@ -792,12 +796,6 @@ def withdraw_admin_fees():
 
     for i in range(N_COINS):
         coin: address = self.coins[i]
-        fees: uint256 = ERC20(coin).balanceOf(self) - self.balances[i]
-        raw_call(
-            coin,
-            concat(
-                method_id("transfer(address,uint256)"),
-                convert(receiver, bytes32),
-                convert(fees, bytes32)
-            )
-        )
+        amount: uint256 = ERC20(coin).balanceOf(self) - self.balances[i]
+        ERC20(coin).approve(receiver, amount)
+        FeeDistributor(receiver).depositFee(coin, amount)

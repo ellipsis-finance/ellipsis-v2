@@ -32,6 +32,9 @@ interface CurveToken:
     def mint(_to: address, _value: uint256) -> bool: nonpayable
     def burnFrom(_to: address, _value: uint256) -> bool: nonpayable
 
+interface FeeDistributor:
+    def depositFee(_token: address, _amount: uint256) -> bool: nonpayable
+
 
 event TokenExchange:
     buyer: indexed(address)
@@ -1017,14 +1020,5 @@ def withdraw_admin_fees():
     amount = ERC20(coin).balanceOf(self) - self.balances[1]
     if amount > 0:
         receiver: address = Factory(factory).get_fee_receiver(self)
-        response: Bytes[32] = raw_call(
-            coin,
-            concat(
-                method_id("transfer(address,uint256)"),
-                convert(receiver, bytes32),
-                convert(amount, bytes32),
-            ),
-            max_outsize=32,
-        )
-        if len(response) > 0:
-            assert convert(response, bool)
+        ERC20(coin).approve(receiver, amount)
+        FeeDistributor(receiver).depositFee(coin, amount)
