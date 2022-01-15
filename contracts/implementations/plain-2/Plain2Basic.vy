@@ -79,7 +79,7 @@ MAX_A: constant(uint256) = 10 ** 6
 MAX_A_CHANGE: constant(uint256) = 10
 MIN_RAMP_TIME: constant(uint256) = 86400
 
-factory: address
+factory: public(address)
 
 lp_token: public(address)
 coins: public(address[N_COINS])
