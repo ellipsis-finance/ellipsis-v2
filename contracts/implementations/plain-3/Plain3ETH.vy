@@ -24,6 +24,9 @@ interface CurveToken:
 interface FeeDistributor:
     def depositFee(_token: address, _amount: uint256) -> bool: nonpayable
 
+interface wBNB:
+    def deposit(): payable
+
 
 event TokenExchange:
     buyer: indexed(address)
@@ -79,6 +82,8 @@ A_PRECISION: constant(uint256) = 100
 MAX_A: constant(uint256) = 10 ** 6
 MAX_A_CHANGE: constant(uint256) = 10
 MIN_RAMP_TIME: constant(uint256) = 86400
+
+WBNB: constant(address) = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
 
 factory: public(address)
 
@@ -830,10 +835,15 @@ def admin_balances(i: uint256) -> uint256:
 def withdraw_admin_fees():
     receiver: address = Factory(self.factory).fee_receiver()
 
-    fees: uint256 = self.balance - self.balances[0]
-    raw_call(receiver, b"", value=fees)
+    amount: uint256 = self.balance - self.balances[0]
+    if amount > 0:
+        wBNB(WBNB).deposit(value=amount)
+        ERC20(WBNB).approve(receiver, amount)
+        FeeDistributor(receiver).depositFee(WBNB, amount)
+
     for i in range(1, N_COINS):
         coin: address = self.coins[i]
-        amount: uint256 = ERC20(coin).balanceOf(self) - self.balances[i]
-        ERC20(coin).approve(receiver, amount)
-        FeeDistributor(receiver).depositFee(coin, amount)
+        amount = ERC20(coin).balanceOf(self) - self.balances[i]
+        if amount > 0:
+            ERC20(coin).approve(receiver, amount)
+            FeeDistributor(receiver).depositFee(coin, amount)
