@@ -26,6 +26,7 @@ contract RewardsToken is ReentrancyGuard {
     string public name;
     uint256 public constant decimals = 18;
     uint256 public totalSupply;
+    uint256 public rewardCount;
 
     address public minter;
     IFactory public factory;
@@ -98,6 +99,7 @@ contract RewardsToken is ReentrancyGuard {
         rewardTokens.push(_rewardsToken);
         rewardData[_rewardsToken].rewardsDistributor = _rewardsDistributor;
         rewardData[_rewardsToken].rewardsDuration = _rewardsDuration;
+        rewardCount++;
     }
 
     function setRewardsDistributor(address _rewardsToken, address _rewardsDistributor) external onlyOwner {
