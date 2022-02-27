@@ -1,13 +1,10 @@
-pragma solidity 0.7.6;
+pragma solidity 0.8.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
 contract EllipsisToken2 is IERC20 {
-
-    using SafeMath for uint256;
 
     string public constant symbol = "EPX";
     string public constant name = "Ellipsis X";
@@ -63,8 +60,8 @@ contract EllipsisToken2 is IERC20 {
     function _transfer(address _from, address _to, uint256 _value) internal {
         require(block.timestamp >= startTime, "Transfers not yet enabled");
         require(balanceOf[_from] >= _value, "Insufficient balance");
-        balanceOf[_from] = balanceOf[_from].sub(_value);
-        balanceOf[_to] = balanceOf[_to].add(_value);
+        balanceOf[_from] -= _value;
+        balanceOf[_to] += _value;
         emit Transfer(_from, _to, _value);
     }
 
@@ -97,8 +94,8 @@ contract EllipsisToken2 is IERC20 {
     {
         uint256 allowed = allowance[_from][msg.sender];
         require(allowed >= _value, "Insufficient allowance");
-        if (allowed != uint(-1)) {
-            allowance[_from][msg.sender] = allowed.sub(_value);
+        if (allowed != type(uint256).max) {
+            allowance[_from][msg.sender] = allowed - _value;
         }
         _transfer(_from, _to, _value);
         return true;
@@ -106,8 +103,8 @@ contract EllipsisToken2 is IERC20 {
 
     function mint(address _to, uint256 _value) external returns (bool) {
         require(minters[msg.sender]);
-        balanceOf[_to] = balanceOf[_to].add(_value);
-        totalSupply = totalSupply.add(_value);
+        balanceOf[_to] += _value;
+        totalSupply += _value;
         require(maxTotalSupply >= totalSupply);
         emit Transfer(address(0), _to, _value);
         return true;
@@ -115,8 +112,8 @@ contract EllipsisToken2 is IERC20 {
 
     function migrate(uint256 _amount) external returns (bool) {
         oldToken.transferFrom(msg.sender, address(0), _amount);
-        uint256 newAmount = _amount.mul(migrationRatio);
-        balanceOf[msg.sender] = balanceOf[msg.sender].add(newAmount);
+        uint256 newAmount = _amount * migrationRatio;
+        balanceOf[msg.sender] += newAmount;
         emit Transfer(address(0), msg.sender, newAmount);
         emit TokensMigrated(msg.sender, _amount, newAmount);
     }

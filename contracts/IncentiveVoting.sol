@@ -1,21 +1,17 @@
-pragma solidity 0.7.6;
+pragma solidity 0.8.12;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
 
 
 interface ITokenLocker {
 
     function userWeight(address _user) external view returns (uint256);
-
     function weeklyTotalWeight(uint256 _week) external view returns (uint256);
-
     function weeklyWeightOf(address _user, uint256 _week)
         external
         view
         returns (uint256);
-
     function startTime() external view returns (uint256);
 }
 
@@ -26,7 +22,6 @@ interface ILpStaking {
 
 
 contract IncentiveVoting is Ownable {
-    using SafeMath for uint256;
 
     struct TokenApprovalVote {
         address token;
@@ -110,7 +105,7 @@ contract IncentiveVoting is Ownable {
         ITokenLocker _tokenLocker,
         uint256 _initialRewardsPerSecond,
         uint256 _quorumPct
-    ) public Ownable() {
+    ) {
         tokenApprovalQuorumPct = _quorumPct;
         tokenLocker = _tokenLocker;
         // start at +1 week to handle the default value in `lastRewardedWeek`
@@ -121,7 +116,7 @@ contract IncentiveVoting is Ownable {
     }
 
     function setLpStaking(ILpStaking _lpStaking) external {
-        require(lpStaking == ILpStaking(0));
+        require(address(lpStaking) == address(0));
         lpStaking = _lpStaking;
     }
 
@@ -147,7 +142,7 @@ contract IncentiveVoting is Ownable {
         uint256 week = getWeek();
         uint256 usedWeight = userVotes[_user][week];
         uint256 totalWeight = tokenLocker.userWeight(_user);
-        return totalWeight.sub(usedWeight);
+        return totalWeight - usedWeight;
     }
 
     /**
@@ -171,24 +166,24 @@ contract IncentiveVoting is Ownable {
         // update rewards per second, if required
         uint256 week = getWeek();
         uint256 length = rewardsPerSecond.length;
-        if (length < week.div(4)) {
+        if (length < week / 4) {
             uint256 perSecond = rewardsPerSecond[length-1];
             while (length < week / 4) {
-                perSecond = perSecond.mul(99).div(100);
+                perSecond = perSecond * 99 / 100;
                 length += 1;
                 rewardsPerSecond.push(perSecond);
             }
         }
 
         // make sure user has not exceeded available weight
-        uint256 usedWeight = userVotes[msg.sender][week].add(_weight);
+        uint256 usedWeight = userVotes[msg.sender][week] + _weight;
         uint256 totalWeight = tokenLocker.userWeight(msg.sender);
         require(usedWeight <= totalWeight, "Available weight exceeded");
 
         // update accounting for this week's votes
-        poolVotes[_pool][week] = poolVotes[_pool][week].add(_weight);
+        poolVotes[_pool][week] = poolVotes[_pool][week] + _weight;
         userVotes[msg.sender][week] = usedWeight;
-        totalVotes[week] = totalVotes[week].add(_weight);
+        totalVotes[week] = totalVotes[week] + _weight;
 
         emit VotedForPoolIncentives(
             msg.sender,
@@ -221,15 +216,12 @@ contract IncentiveVoting is Ownable {
         // minimum weight of 50,000 and max one vote per week to prevent spamming votes
         require(weight >= 50000 * 10**18, "Not enough weight");
         require(
-            lastVote[msg.sender].add(WEEK) <= block.timestamp,
+            lastVote[msg.sender] + WEEK <= block.timestamp,
             "One new vote per week"
         );
         lastVote[msg.sender] = block.timestamp;
 
-        uint256 required = tokenLocker
-            .weeklyTotalWeight(week)
-            .mul(tokenApprovalQuorumPct)
-            .div(100);
+        uint256 required = tokenLocker.weeklyTotalWeight(week) * tokenApprovalQuorumPct / 100;
         tokenApprovalVotes.push(
             TokenApprovalVote({
                 token: _token,
@@ -266,12 +258,12 @@ contract IncentiveVoting is Ownable {
     function voteForTokenApproval(uint256 _voteIndex) external {
         TokenApprovalVote storage vote = tokenApprovalVotes[_voteIndex];
         require(!hasVoted[_voteIndex][msg.sender], "Already voted");
-        require(vote.startTime > block.timestamp.sub(WEEK), "Vote has ended");
+        require(vote.startTime > block.timestamp - WEEK, "Vote has ended");
         require(!approvedTokens[vote.token], "Already approved");
 
         hasVoted[_voteIndex][msg.sender] = true;
         uint256 weight = tokenLocker.weeklyWeightOf(msg.sender, vote.week);
-        vote.givenWeight = vote.givenWeight.add(weight);
+        vote.givenWeight = vote.givenWeight + weight;
 
         bool isApproved = vote.givenWeight >= vote.requiredWeight;
         if (isApproved) {
@@ -292,7 +284,7 @@ contract IncentiveVoting is Ownable {
     function getPoolRewardsPerSecond(address _pool, uint256 _week) external view returns (uint256) {
         uint256 votes = poolVotes[_pool][_week];
         if (votes == 0) return 0;
-        return rewardsPerSecond[_week.div(4)].mul(votes).div(totalVotes[_week]);
+        return rewardsPerSecond[_week / 4] * votes / totalVotes[_week];
     }
 
     /**

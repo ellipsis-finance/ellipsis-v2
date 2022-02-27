@@ -1,8 +1,7 @@
-pragma solidity 0.7.6;
+pragma solidity 0.8.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
 interface ITokenLocker {
@@ -12,7 +11,6 @@ interface ITokenLocker {
 }
 
 contract FeeDistributor {
-    using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     struct StreamData {
@@ -55,9 +53,19 @@ contract FeeDistributor {
         uint256 amount
     );
 
-    constructor(ITokenLocker _tokenLocker) public {
+    constructor(ITokenLocker _tokenLocker) {
         tokenLocker = _tokenLocker;
         startTime = _tokenLocker.startTime();
+
+    }
+
+    function getWeek() public view returns (uint256) {
+        if (startTime == 0) return 0;
+        return (block.timestamp - startTime) / 604800;
+    }
+
+    function feeTokensLength() external view returns (uint) {
+        return feeTokens.length;
     }
 
     /**
@@ -77,11 +85,9 @@ contract FeeDistributor {
             }
             uint256 received = IERC20(_token).balanceOf(address(this));
             IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
-            received = IERC20(_token).balanceOf(address(this)).sub(received);
-            uint256 week = tokenLocker.getWeek();
-            weeklyFeeAmounts[_token][week] = weeklyFeeAmounts[_token][week].add(
-                received
-            );
+            received = IERC20(_token).balanceOf(address(this)) - received;
+            uint256 week = getWeek();
+            weeklyFeeAmounts[_token][week] += received;
             emit FeesReceived(msg.sender, _token, week, _amount);
         }
         return true;
@@ -128,33 +134,12 @@ contract FeeDistributor {
         return claimedAmounts;
     }
 
-    /**
-        @dev Increase the amount within a lock weight array over a given time period
-     */
-    function _increaseAmount(
-        uint256[9362] storage _record,
-        uint256 _start,
-        uint256 _amount,
-        uint256 _rounds,
-        uint256 _oldRounds
-    ) internal {
-        uint256 oldEnd = _start.add(_oldRounds);
-        uint256 end = _start.add(_rounds);
-        for (uint256 i = _start; i < end; i++) {
-            uint256 amount = _amount.mul(end.sub(i));
-            if (i < oldEnd) {
-                amount = amount.sub(_amount.mul(oldEnd.sub(i)));
-            }
-            _record[i] = _record[i].add(amount);
-        }
-    }
-
     function _getClaimable(address _user, address _token)
         internal
         view
         returns (uint256, StreamData memory)
     {
-        uint256 claimableWeek = tokenLocker.getWeek();
+        uint256 claimableWeek = getWeek();
 
         if (claimableWeek == 0) {
             // the first full week hasn't completed yet
@@ -176,14 +161,14 @@ contract FeeDistributor {
             // special case: claim is happening in the same week as a previous claim
             uint256 previouslyClaimed = stream.claimed;
             stream = _buildStreamData(_user, _token, claimableWeek);
-            amount = stream.claimed.sub(previouslyClaimed);
+            amount = stream.claimed - previouslyClaimed;
             return (amount, stream);
         }
 
         if (stream.start > 0) {
             // if there is a partially claimed week, get the unclaimed amount and increment
             // `lastClaimWeeek` so we begin iteration on the following week
-            amount = stream.amount.sub(stream.claimed);
+            amount = stream.amount - stream.claimed;
             lastClaimWeek += 1;
         }
 
@@ -191,16 +176,13 @@ contract FeeDistributor {
         for (uint256 i = lastClaimWeek; i < claimableWeek; i++) {
             (uint256 userWeight, uint256 totalWeight) = tokenLocker.weeklyWeight(_user, i);
             if (userWeight == 0) continue;
-            amount = amount.add(
-                weeklyFeeAmounts[_token][i].mul(userWeight) /
-                    totalWeight
-            );
+            amount += weeklyFeeAmounts[_token][i] * userWeight / totalWeight;
         }
 
         // add a partial amount for the active week
         stream = _buildStreamData(_user, _token, claimableWeek);
 
-        return (amount.add(stream.claimed), stream);
+        return (amount + stream.claimed, stream);
     }
 
     function _buildStreamData(
@@ -208,13 +190,13 @@ contract FeeDistributor {
         address _token,
         uint256 _week
     ) internal view returns (StreamData memory) {
-        uint256 start = startTime.add(_week.mul(WEEK));
+        uint256 start = startTime + _week * WEEK;
         (uint256 userWeight, uint256 totalWeight) = tokenLocker.weeklyWeight(_user, _week);
         uint256 amount;
         uint256 claimed;
         if (userWeight > 0) {
-            amount = weeklyFeeAmounts[_token][_week].mul(userWeight) / totalWeight;
-            claimed = amount.mul(block.timestamp - 604800 - start) / WEEK;
+            amount = weeklyFeeAmounts[_token][_week] * userWeight / totalWeight;
+            claimed = amount * (block.timestamp - 604800 - start) / WEEK;
         }
         return StreamData({start: start, amount: amount, claimed: claimed});
     }

@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.7.6;
+pragma solidity 0.8.12;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
 interface IIncentiveVoting {
@@ -26,7 +25,6 @@ interface ITokenLocker {
 // based on the Sushi MasterChef
 // https://github.com/sushiswap/sushiswap/blob/master/contracts/MasterChef.sol
 contract EllipsisLpStaking {
-    using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     // Info of each user.
@@ -133,8 +131,8 @@ contract EllipsisLpStaking {
             PoolInfo storage pool = poolInfo[token];
             UserInfo storage user = userInfo[token][_user];
             (uint256 accRewardPerShare,) = _getRewardData(token);
-            accRewardPerShare = accRewardPerShare.add(pool.accRewardPerShare);
-            claimable[i] = user.depositAmount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
+            accRewardPerShare = accRewardPerShare + pool.accRewardPerShare;
+            claimable[i] = user.depositAmount * accRewardPerShare / 1e12 - user.rewardDebt;
         }
         return claimable;
     }
@@ -143,31 +141,31 @@ contract EllipsisLpStaking {
         PoolInfo storage pool = poolInfo[_token];
         uint256 lpSupply = pool.adjustedSupply;
         uint256 start = startTime;
-        uint256 currentWeek = block.timestamp.sub(start) / 604800;
+        uint256 currentWeek = (block.timestamp - start) / 604800;
 
         if (lpSupply == 0) {
             return (0, incentiveVoting.getPoolRewardsPerSecond(_token, currentWeek));
         }
 
         uint256 lastRewardTime = pool.lastRewardTime;
-        uint256 rewardWeek = lastRewardTime.sub(start) / 604800;
+        uint256 rewardWeek = (lastRewardTime - start) / 604800;
         rewardsPerSecond = pool.rewardsPerSecond;
         uint256 reward;
         uint256 duration;
         if (rewardWeek < currentWeek) {
             while (rewardWeek < currentWeek) {
-                uint256 nextRewardTime = rewardWeek.add(1).mul(604800).add(start);
-                duration = nextRewardTime.sub(lastRewardTime);
-                reward = reward.add(duration.mul(rewardsPerSecond));
+                uint256 nextRewardTime = (rewardWeek + 1) * 604800 + start;
+                duration = nextRewardTime - lastRewardTime;
+                reward = reward + duration * rewardsPerSecond;
                 rewardWeek += 1;
                 rewardsPerSecond = incentiveVoting.getPoolRewardsPerSecond(_token, rewardWeek);
                 lastRewardTime = nextRewardTime;
             }
         }
 
-        duration = block.timestamp.sub(lastRewardTime);
-        reward = reward.add(duration.mul(rewardsPerSecond));
-        return (reward.mul(1e12).div(lpSupply), rewardsPerSecond);
+        duration = block.timestamp - lastRewardTime;
+        reward = reward + duration * rewardsPerSecond;
+        return (reward * 1e12 / lpSupply, rewardsPerSecond);
     }
 
     // Update reward variables of the given pool to be up-to-date.
@@ -181,18 +179,18 @@ contract EllipsisLpStaking {
         (accRewardPerShare, pool.rewardsPerSecond) = _getRewardData(_token);
         pool.lastRewardTime = block.timestamp;
         if (accRewardPerShare == 0) return pool.accRewardPerShare;
-        accRewardPerShare = accRewardPerShare.add(pool.accRewardPerShare);
+        accRewardPerShare = accRewardPerShare + pool.accRewardPerShare;
         pool.accRewardPerShare = accRewardPerShare;
         return accRewardPerShare;
     }
 
     function _mint(address _user, uint256 _amount) internal {
         uint256 minted = mintedTokens;
-        if (minted.add(_amount) > maxMintableTokens) {
-            _amount = maxMintableTokens.sub(minted);
+        if (minted + _amount > maxMintableTokens) {
+            _amount = maxMintableTokens - minted;
         }
         if (_amount > 0) {
-            mintedTokens = minted.add(_amount);
+            mintedTokens = minted + _amount;
             address receiver = claimReceiver[_user];
             if (receiver == address(0)) receiver = _user;
             rewardToken.mint(receiver, _amount);
@@ -202,21 +200,21 @@ contract EllipsisLpStaking {
     // calculate adjusted balance and total supply, used for boost
     function _updateLiquidityLimits(address _user, address _token, uint256 _depositAmount, uint256 _accRewardPerShare) internal {
         uint256 userWeight = tokenLocker.userWeight(_user);
-        uint256 adjustedAmount = _depositAmount.mul(40).div(100);
+        uint256 adjustedAmount = _depositAmount * 40 / 100;
         if (userWeight > 0) {
             uint256 lpSupply = IERC20(_token).balanceOf(address(this));
             uint256 totalWeight = tokenLocker.totalWeight();
-            uint256 boost = lpSupply.mul(userWeight).div(totalWeight).mul(60).div(100);
-            adjustedAmount = adjustedAmount.add(boost);
+            uint256 boost = lpSupply * userWeight / totalWeight * 60 / 100;
+            adjustedAmount += boost;
             if (adjustedAmount > _depositAmount) {
                 adjustedAmount = _depositAmount;
             }
         }
         UserInfo storage user = userInfo[_token][_user];
-        uint256 newAdjustedSupply = poolInfo[_token].adjustedSupply.sub(user.adjustedAmount);
+        uint256 newAdjustedSupply = poolInfo[_token].adjustedSupply - user.adjustedAmount;
         user.adjustedAmount = adjustedAmount;
-        poolInfo[_token].adjustedSupply = newAdjustedSupply.add(adjustedAmount);
-        user.rewardDebt = adjustedAmount.mul(_accRewardPerShare).div(1e12);
+        poolInfo[_token].adjustedSupply = newAdjustedSupply + adjustedAmount;
+        user.rewardDebt = adjustedAmount * _accRewardPerShare / 1e12;
     }
 
     // Deposit LP tokens into the contract. Also triggers a claim.
@@ -224,9 +222,9 @@ contract EllipsisLpStaking {
         uint256 accRewardPerShare = _updatePool(_token);
         UserInfo storage user = userInfo[_token][msg.sender];
         if (user.adjustedAmount > 0) {
-            uint256 pending = user.adjustedAmount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
+            uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
             if (pending > 0) {
-                userBaseClaimable[msg.sender] = userBaseClaimable[msg.sender].add(pending);
+                userBaseClaimable[msg.sender] += pending;
             }
         }
         IERC20(_token).safeTransferFrom(
@@ -234,7 +232,7 @@ contract EllipsisLpStaking {
             address(this),
             _amount
         );
-        uint256 depositAmount = user.depositAmount.add(_amount);
+        uint256 depositAmount = user.depositAmount + _amount;
         user.depositAmount = depositAmount;
         _updateLiquidityLimits(msg.sender, _token, depositAmount, accRewardPerShare);
         emit Deposit(_token, msg.sender, _amount);
@@ -247,11 +245,11 @@ contract EllipsisLpStaking {
         uint256 depositAmount = user.depositAmount;
         require(depositAmount >= _amount, "withdraw: not good");
 
-        uint256 pending = user.adjustedAmount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
+        uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
         if (pending > 0) {
-            userBaseClaimable[msg.sender] = userBaseClaimable[msg.sender].add(pending);
+            userBaseClaimable[msg.sender] = userBaseClaimable[msg.sender] + pending;
         }
-        depositAmount = depositAmount.sub(_amount);
+        depositAmount -= _amount;
         user.depositAmount = depositAmount;
         _updateLiquidityLimits(msg.sender, _token, depositAmount, accRewardPerShare);
         IERC20(_token).safeTransfer(address(msg.sender), _amount);
@@ -277,8 +275,8 @@ contract EllipsisLpStaking {
             address token = _tokens[i];
             uint256 accRewardPerShare = _updatePool(token);
             UserInfo storage user = userInfo[token][_user];
-            uint256 rewardDebt = user.adjustedAmount.mul(accRewardPerShare).div(1e12);
-            pending = pending.add(rewardDebt.sub(user.rewardDebt));
+            uint256 rewardDebt = user.adjustedAmount * accRewardPerShare / 1e12;
+            pending += rewardDebt - user.rewardDebt;
             _updateLiquidityLimits(_user, token, user.depositAmount, accRewardPerShare);
         }
         _mint(_user, pending);

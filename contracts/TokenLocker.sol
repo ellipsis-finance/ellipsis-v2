@@ -1,12 +1,10 @@
-pragma solidity 0.7.6;
+pragma solidity 0.8.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
 contract TokenLocker {
-    using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     struct StreamData {
@@ -35,7 +33,7 @@ contract TokenLocker {
     // related to the exit stream.
     mapping(address => StreamData) public exitStream;
 
-    address public immutable stakingToken;
+    IERC20 public immutable stakingToken;
     uint256 public immutable startTime;
 
     uint256 constant WEEK = 86400 * 7;
@@ -65,10 +63,10 @@ contract TokenLocker {
                           same time as the planned token migration.
      */
     constructor(
-        address _stakingToken,
+        IERC20 _stakingToken,
         uint256 _startTime,
         uint256 _maxLockWeeks
-    ) public {
+    ) {
         MAX_LOCK_WEEKS = _maxLockWeeks;
         stakingToken = _stakingToken;
         // must start on the epoch week
@@ -77,7 +75,6 @@ contract TokenLocker {
     }
 
     function getWeek() public view returns (uint256) {
-        if (startTime >= block.timestamp) return 0;
         return (block.timestamp - startTime) / WEEK;
     }
 
@@ -156,7 +153,7 @@ contract TokenLocker {
              each lock's weeks until unlock is reduced by 1. Locks that reach 0 week no longer
              receive any weight, and tokens may be withdrawn by calling `initiateExitStream`.
         @param _user Address to create a new lock for (does not have to be the caller)
-        @param _amount Amount of `stakingToken` to lock. This balance transfered from the caller.
+        @param _amount Amount of tokens to lock. This balance transfered from the caller.
         @param _weeks The number of weeks for the lock.
      */
     function lock(
@@ -168,14 +165,14 @@ contract TokenLocker {
         require(_weeks <= MAX_LOCK_WEEKS, "Exceeds MAX_LOCK_WEEKS");
         require(_amount > 0, "Amount must be nonzero");
 
-        IERC20(stakingToken).safeTransferFrom(msg.sender, address(this), _amount);
+        stakingToken.safeTransferFrom(msg.sender, address(this), _amount);
 
         uint256 start = getWeek();
         _increaseAmount(weeklyTotalWeight, start, _amount, _weeks, 0);
         _increaseAmount(weeklyWeightOf[_user], start, _amount, _weeks, 0);
 
-        uint256 end = start.add(_weeks);
-        weeklyUnlocksOf[_user][end] = weeklyUnlocksOf[_user][end].add(_amount);
+        uint256 end = start + _weeks;
+        weeklyUnlocksOf[_user][end] = weeklyUnlocksOf[_user][end] + _amount;
 
         emit NewLock(_user, _amount, _weeks);
         return true;
@@ -183,11 +180,11 @@ contract TokenLocker {
 
     /**
         @notice Extend the length of an existing lock.
-        @param _amount Amount of `stakingToken` to extend the lock for. When the value given
-                       is equal to the total size of the existing lock, the entire lock is moved.
-                       If the amount is less, then the lock is effectively split into two locks,
-                       with a portion of the balance extended to the new length and the remaining
-                       balance at the old length.
+        @param _amount Amount of tokens to extend the lock for. When the value given equals
+                       the total size of the existing lock, the entire lock is moved.
+                       If the amount is less, then the lock is effectively split into
+                       two locks, with a portion of the balance extended to the new length
+                       and the remaining balance at the old length.
         @param _weeks The number of weeks for the lock that is being extended.
         @param _newWeeks The number of weeks to extend the lock until.
      */
@@ -203,10 +200,10 @@ contract TokenLocker {
 
         uint256[9362] storage unlocks = weeklyUnlocksOf[msg.sender];
         uint256 start = getWeek();
-        uint256 end = start.add(_weeks);
-        unlocks[end] = unlocks[end].sub(_amount);
-        end = start.add(_newWeeks);
-        unlocks[end] = unlocks[end].add(_amount);
+        uint256 end = start + _weeks;
+        unlocks[end] = unlocks[end] - _amount;
+        end = start + _newWeeks;
+        unlocks[end] = unlocks[end] + _amount;
 
         _increaseAmount(weeklyTotalWeight, start, _amount, _newWeeks, _weeks);
         _increaseAmount(
@@ -229,7 +226,7 @@ contract TokenLocker {
         uint256 streamable = streamableBalance(msg.sender);
         require(streamable > 0, "No withdrawable balance");
 
-        uint256 amount = stream.amount.sub(stream.claimed).add(streamable);
+        uint256 amount = stream.amount - stream.claimed + streamable;
         exitStream[msg.sender] = StreamData({
             start: block.timestamp,
             amount: amount,
@@ -249,17 +246,17 @@ contract TokenLocker {
         uint256 amount;
         if (stream.start > 0) {
             amount = claimableExitStreamBalance(msg.sender);
-            if (stream.start.add(WEEK) < block.timestamp) {
+            if (stream.start + WEEK < block.timestamp) {
                 delete exitStream[msg.sender];
             } else {
-                stream.claimed = stream.claimed.add(amount);
+                stream.claimed = stream.claimed + amount;
             }
-            IERC20(stakingToken).safeTransfer(msg.sender, amount);
+            stakingToken.safeTransfer(msg.sender, amount);
         }
         emit ExitStreamWithdrawal(
             msg.sender,
             amount,
-            stream.amount.sub(stream.claimed)
+            stream.amount - stream.claimed
         );
         return true;
     }
@@ -279,29 +276,26 @@ contract TokenLocker {
             last <= finishedWeek;
             last++
         ) {
-            amount = amount.add(unlocks[last]);
+            amount = amount + unlocks[last];
         }
         return amount;
     }
 
     /**
-        @notice Get the amount of `stakingToken` available to withdraw
-                from the active exit stream.
+        @notice Get the amount of tokens available to withdraw from the active exit stream.
      */
     function claimableExitStreamBalance(address _user)
         public
         view
         returns (uint256)
     {
-        StreamData storage stream = exitStream[msg.sender];
+        StreamData storage stream = exitStream[_user];
         if (stream.start == 0) return 0;
-        if (stream.start.add(WEEK) < block.timestamp) {
-            return stream.amount.sub(stream.claimed);
+        if (stream.start + WEEK < block.timestamp) {
+            return stream.amount - stream.claimed;
         } else {
-            uint256 claimable = stream.amount.mul(
-                block.timestamp.sub(stream.start)
-            ) / WEEK;
-            return claimable.sub(stream.claimed);
+            uint256 claimable = stream.amount * (block.timestamp - stream.start) / WEEK;
+            return claimable - stream.claimed;
         }
     }
 
@@ -315,14 +309,14 @@ contract TokenLocker {
         uint256 _rounds,
         uint256 _oldRounds
     ) internal {
-        uint256 oldEnd = _start.add(_oldRounds);
-        uint256 end = _start.add(_rounds);
+        uint256 oldEnd = _start + _oldRounds;
+        uint256 end = _start + _rounds;
         for (uint256 i = _start; i < end; i++) {
-            uint256 amount = _amount.mul(end.sub(i));
+            uint256 amount = _amount * (end - i);
             if (i < oldEnd) {
-                amount = amount.sub(_amount.mul(oldEnd.sub(i)));
+                amount -= _amount * (oldEnd - i);
             }
-            _record[i] = _record[i].add(amount);
+            _record[i] += amount;
         }
     }
 
