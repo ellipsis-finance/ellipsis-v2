@@ -25,7 +25,7 @@ interface ITokenLocker {
 
 // based on the Sushi MasterChef
 // https://github.com/sushiswap/sushiswap/blob/master/contracts/MasterChef.sol
-contract MasterChef {
+contract EllipsisLpStaking {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -199,6 +199,7 @@ contract MasterChef {
         }
     }
 
+    // calculate adjusted balance and total supply, used for boost
     function _updateLiquidityLimits(address _user, address _token, uint256 _depositAmount, uint256 _accRewardPerShare) internal {
         uint256 userWeight = tokenLocker.userWeight(_user);
         uint256 adjustedAmount = _depositAmount.mul(40).div(100);
