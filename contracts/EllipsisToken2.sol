@@ -9,13 +9,12 @@ contract EllipsisToken2 is IERC20 {
 
     using SafeMath for uint256;
 
-    string public constant symbol = "EPS2";
-    string public constant name = "Ellipsis 2";
+    string public constant symbol = "EPX";
+    string public constant name = "Ellipsis X";
     uint8 public constant decimals = 18;
     uint256 public override totalSupply;
     uint256 public immutable maxTotalSupply;
     uint256 public immutable startTime;
-    address public minter;
 
     IERC20 public immutable oldToken;
     uint256 public immutable migrationRatio;
@@ -23,6 +22,9 @@ contract EllipsisToken2 is IERC20 {
 
     mapping(address => uint256) public override balanceOf;
     mapping(address => mapping(address => uint256)) public override allowance;
+
+    mapping(address => bool) public minters;
+    bool isMinterSet;
 
     event TokensMigrated(
         address indexed user,
@@ -43,9 +45,12 @@ contract EllipsisToken2 is IERC20 {
         emit Transfer(address(0), msg.sender, 0);
     }
 
-    function setAddresses(address _lpStaking) external {
-        require(minter == address(0));
-        minter = _lpStaking;
+    function setMinters(address[] calldata _minters) external {
+        require(!isMinterSet);
+        isMinterSet = true;
+        for (uint256 i = 0; i < _minters.length; i++) {
+            minters[_minters[i]] = true;
+        }
     }
 
     function approve(address _spender, uint256 _value) external override returns (bool) {
@@ -100,7 +105,7 @@ contract EllipsisToken2 is IERC20 {
     }
 
     function mint(address _to, uint256 _value) external returns (bool) {
-        require(msg.sender == minter);
+        require(minters[msg.sender]);
         balanceOf[_to] = balanceOf[_to].add(_value);
         totalSupply = totalSupply.add(_value);
         require(maxTotalSupply >= totalSupply);
