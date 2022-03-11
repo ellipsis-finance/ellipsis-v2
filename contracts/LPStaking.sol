@@ -14,11 +14,16 @@ interface IIncentiveVoting {
 
 interface IERC20Mintable {
     function mint(address _to, uint256 _value) external returns (bool);
+    function minter() external view returns (address);
 }
 
 interface ITokenLocker {
     function userWeight(address _user) external view returns (uint256);
     function totalWeight() external view returns (uint256);
+}
+
+interface IStableSwap {
+    function withdraw_admin_fees() external;
 }
 
 
@@ -60,6 +65,8 @@ contract EllipsisLpStaking {
     // this is used to aid 3rd party contract integrations
     mapping (address => address) public claimReceiver;
 
+    mapping(address => uint256) public lastFeeClaim;
+
     IERC20Mintable public immutable rewardToken;
     IIncentiveVoting public immutable incentiveVoting;
     ITokenLocker public immutable tokenLocker;
@@ -81,6 +88,8 @@ contract EllipsisLpStaking {
         address indexed user,
         uint256 amount
     );
+    event FeeClaimSuccess(address pool);
+    event FeeClaimRevert(address pool);
 
     constructor(
         IERC20Mintable _rewardToken,
@@ -278,6 +287,17 @@ contract EllipsisLpStaking {
             uint256 rewardDebt = user.adjustedAmount * accRewardPerShare / 1e12;
             pending += rewardDebt - user.rewardDebt;
             _updateLiquidityLimits(_user, token, user.depositAmount, accRewardPerShare);
+            
+            // claim admin fees for each pool once per day
+            if (lastFeeClaim[token] + 86400 < block.timestamp) {
+                address pool = IERC20Mintable(token).minter();
+                try IStableSwap(pool).withdraw_admin_fees() {
+                    emit FeeClaimSuccess(pool);
+                } catch {
+                    emit FeeClaimRevert(pool);
+                }
+                lastFeeClaim[token] = block.timestamp;
+            }
         }
         _mint(_user, pending);
     }

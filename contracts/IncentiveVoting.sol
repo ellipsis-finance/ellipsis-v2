@@ -20,6 +20,14 @@ interface ILpStaking {
     function addPool(address _token) external returns (bool);
 }
 
+interface IStableSwap {
+    function withdraw_admin_fees() external;
+}
+
+interface IERC20Mintable {
+    function minter() external view returns (address);
+}
+
 
 contract IncentiveVoting is Ownable {
 
@@ -207,6 +215,13 @@ contract IncentiveVoting is Ownable {
         require(!approvedTokens[_token], "Already approved");
         uint256 week = getWeek();
         require(week > 1, "Cannot make vote in first week");
+
+        // verify that claiming admin fees works for the pool associated with
+        // this LP token. if the call does not work, the token is likely not
+        // an LP token or contains an incompatible asset.
+        address pool = IERC20Mintable(_token).minter();
+        IStableSwap(pool).withdraw_admin_fees();
+
         week -= 2;
         uint256 weight = tokenLocker.weeklyWeightOf(msg.sender, week);
 
