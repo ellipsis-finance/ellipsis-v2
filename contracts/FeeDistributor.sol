@@ -35,6 +35,14 @@ contract FeeDistributor {
     // private mapping for tracking which addresses were added to `feeTokens`
     mapping(address => bool) seenFees;
 
+    // account earning rewards => receiver of rewards for this account
+    // if receiver is set to address(0), rewards are paid to the earner
+    // this is used to aid 3rd party contract integrations
+    mapping (address => address) public claimReceiver;
+
+    // when set to true, other accounts cannot call `claim` on behalf of an account
+    mapping(address => bool) public blockThirdPartyActions;
+
     ITokenLocker public immutable tokenLocker;
     uint256 public immutable startTime;
 
@@ -47,7 +55,8 @@ contract FeeDistributor {
         uint256 amount
     );
     event FeesClaimed(
-        address indexed caller,
+        address caller,
+        address indexed account,
         address indexed receiver,
         address indexed token,
         uint256 amount
@@ -57,6 +66,14 @@ contract FeeDistributor {
         tokenLocker = _tokenLocker;
         startTime = _tokenLocker.startTime();
 
+    }
+
+    function setClaimReceiver(address _receiver) external {
+        claimReceiver[msg.sender] = _receiver;
+    }
+
+    function setBlockThirdPartyActions(bool _block) external {
+        blockThirdPartyActions[msg.sender] = _block;
     }
 
     function getWeek() public view returns (uint256) {
@@ -122,14 +139,19 @@ contract FeeDistributor {
         external
         returns (uint256[] memory claimedAmounts)
     {
+        if (msg.sender != _user) {
+            require(!blockThirdPartyActions[_user], "Cannot claim on behalf of this account");
+        }
+        address receiver = claimReceiver[_user];
+        if (receiver == address(0)) receiver = _user;
         claimedAmounts = new uint256[](_tokens.length);
         StreamData memory stream;
         for (uint256 i = 0; i < _tokens.length; i++) {
             address token = _tokens[i];
             (claimedAmounts[i], stream) = _getClaimable(_user, token);
             activeUserStream[_user][token] = stream;
-            IERC20(token).safeTransfer(_user, claimedAmounts[i]);
-            emit FeesClaimed(msg.sender, _user, token, claimedAmounts[i]);
+            IERC20(token).safeTransfer(receiver, claimedAmounts[i]);
+            emit FeesClaimed(msg.sender, _user, receiver, token, claimedAmounts[i]);
         }
         return claimedAmounts;
     }

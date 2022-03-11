@@ -65,6 +65,10 @@ contract EllipsisLpStaking {
     // this is used to aid 3rd party contract integrations
     mapping (address => address) public claimReceiver;
 
+    // when set to true, other accounts cannot call
+    // `deposit` or `claim` on behalf of an account
+    mapping(address => bool) public blockThirdPartyActions;
+
     mapping(address => uint256) public lastFeeClaim;
 
     IERC20Mintable public immutable rewardToken;
@@ -125,6 +129,10 @@ contract EllipsisLpStaking {
 
     function setClaimReceiver(address _receiver) external {
         claimReceiver[msg.sender] = _receiver;
+    }
+
+    function setBlockThirdPartyActions(bool _block) external {
+        blockThirdPartyActions[msg.sender] = _block;
     }
 
     function poolLength() external view returns (uint256) {
@@ -230,6 +238,9 @@ contract EllipsisLpStaking {
 
     // Deposit LP tokens into the contract. Also triggers a claim.
     function deposit(address _receiver, address _token, uint256 _amount) external {
+        if (msg.sender != _receiver) {
+            require(!blockThirdPartyActions[_receiver], "Cannot deposit on behalf of this account");
+        }
         uint256 accRewardPerShare = _updatePool(_token);
         UserInfo storage user = userInfo[_token][_receiver];
         if (user.adjustedAmount > 0) {
@@ -280,6 +291,9 @@ contract EllipsisLpStaking {
     // Claim pending rewards for one or more pools.
     // Rewards are not received directly, they are minted by the rewardMinter.
     function claim(address _user, address[] calldata _tokens) external {
+        if (msg.sender != _user) {
+            require(!blockThirdPartyActions[_user], "Cannot claim on behalf of this account");
+        }
         uint256 pending = userBaseClaimable[_user];
         userBaseClaimable[_user] = 0;
         for (uint i = 0; i < _tokens.length; i++) {
@@ -289,7 +303,7 @@ contract EllipsisLpStaking {
             uint256 rewardDebt = user.adjustedAmount * accRewardPerShare / 1e12;
             pending += rewardDebt - user.rewardDebt;
             _updateLiquidityLimits(_user, token, user.depositAmount, accRewardPerShare);
-            
+
             // claim admin fees for each pool once per day
             if (lastFeeClaim[token] + 86400 < block.timestamp) {
                 address pool = IERC20Mintable(token).minter();
