@@ -72,14 +72,16 @@ contract EllipsisLpStaking {
     ITokenLocker public immutable tokenLocker;
 
     event Deposit(
+        address indexed caller,
+        address indexed receiver,
         address indexed token,
-        address indexed user,
         uint256 amount
     );
 
     event Withdraw(
+        address indexed caller,
+        address indexed receiver,
         address indexed token,
-        address indexed user,
         uint256 amount
     );
 
@@ -227,13 +229,13 @@ contract EllipsisLpStaking {
     }
 
     // Deposit LP tokens into the contract. Also triggers a claim.
-    function deposit(address _token, uint256 _amount) external {
+    function deposit(address _receiver, address _token, uint256 _amount) external {
         uint256 accRewardPerShare = _updatePool(_token);
-        UserInfo storage user = userInfo[_token][msg.sender];
+        UserInfo storage user = userInfo[_token][_receiver];
         if (user.adjustedAmount > 0) {
             uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
             if (pending > 0) {
-                userBaseClaimable[msg.sender] += pending;
+                userBaseClaimable[_receiver] += pending;
             }
         }
         IERC20(_token).safeTransferFrom(
@@ -243,12 +245,12 @@ contract EllipsisLpStaking {
         );
         uint256 depositAmount = user.depositAmount + _amount;
         user.depositAmount = depositAmount;
-        _updateLiquidityLimits(msg.sender, _token, depositAmount, accRewardPerShare);
-        emit Deposit(_token, msg.sender, _amount);
+        _updateLiquidityLimits(_receiver, _token, depositAmount, accRewardPerShare);
+        emit Deposit(msg.sender, _receiver, _token, _amount);
     }
 
     // Withdraw LP tokens. Also triggers a claim.
-    function withdraw(address _token, uint256 _amount) external {
+    function withdraw(address _receiver, address _token, uint256 _amount) external {
         uint256 accRewardPerShare = _updatePool(_token);
         UserInfo storage user = userInfo[_token][msg.sender];
         uint256 depositAmount = user.depositAmount;
@@ -261,8 +263,8 @@ contract EllipsisLpStaking {
         depositAmount -= _amount;
         user.depositAmount = depositAmount;
         _updateLiquidityLimits(msg.sender, _token, depositAmount, accRewardPerShare);
-        IERC20(_token).safeTransfer(address(msg.sender), _amount);
-        emit Withdraw(_token, msg.sender, _amount);
+        IERC20(_token).safeTransfer(_receiver, _amount);
+        emit Withdraw(msg.sender, _receiver, _token, _amount);
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
