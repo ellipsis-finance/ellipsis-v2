@@ -29,7 +29,6 @@ contract IncentiveVoting is Ownable {
         uint16 week;
         uint256 requiredWeight;
         uint256 givenWeight;
-        string ipfsCid;
     }
 
     // token -> week -> weight allocated
@@ -74,8 +73,7 @@ contract IncentiveVoting is Ownable {
         uint256 startTime,
         uint256 week,
         uint256 requiredWeight,
-        uint256 voteIndex,
-        string ipfsCid
+        uint256 voteIndex
     );
 
     event VotedForTokenApproval(
@@ -200,10 +198,9 @@ contract IncentiveVoting is Ownable {
              incentives being given to pools with malicious assets. We trust
              lockers to vote in the best longterm interests of the protocol :)
         @param _token Token address to create a vote for
-        @param _ipfsCid IPFS CID pointing at a description of the vote
         @return _voteIndex uint Index value used to reference the vote
      */
-    function createTokenApprovalVote(address _token, string calldata _ipfsCid)
+    function createTokenApprovalVote(address _token)
         external
         returns (uint256 _voteIndex)
     {
@@ -228,8 +225,7 @@ contract IncentiveVoting is Ownable {
                 startTime: uint40(block.timestamp),
                 week: uint16(week),
                 requiredWeight: required,
-                givenWeight: 0,
-                ipfsCid: _ipfsCid
+                givenWeight: 0
             })
         );
 
@@ -240,8 +236,7 @@ contract IncentiveVoting is Ownable {
             block.timestamp,
             week,
             required,
-            voteIdx,
-            _ipfsCid
+            voteIdx
         );
         return voteIdx;
     }
