@@ -281,6 +281,7 @@ contract EllipsisLpStaking {
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(address _token) external {
         UserInfo storage user = userInfo[_token][msg.sender];
+
         uint256 amount = user.depositAmount;
         delete userInfo[_token][msg.sender];
         IERC20(_token).safeTransfer(address(msg.sender), amount);
@@ -315,6 +316,21 @@ contract EllipsisLpStaking {
             }
         }
         _mint(_user, pending);
+    }
+
+    function updateUserBoosts(address _user, address[] calldata _tokens) external {
+        for (uint i = 0; i < _tokens.length; i++) {
+            address token = _tokens[i];
+            uint256 accRewardPerShare = _updatePool(token);
+            UserInfo storage user = userInfo[token][_user];
+            if (user.adjustedAmount > 0) {
+                uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
+                if (pending > 0) {
+                    userBaseClaimable[_user] += pending;
+                }
+            }
+            _updateLiquidityLimits(_user, token, user.depositAmount, accRewardPerShare);
+        }
     }
 
 }
