@@ -172,7 +172,7 @@ contract IncentiveVoting is Ownable {
     {
         uint256 week = getWeek();
         uint256 usedWeight = userVotes[_user][week];
-        uint256 totalWeight = tokenLocker.userWeight(_user);
+        uint256 totalWeight = tokenLocker.userWeight(_user) / 1e18;
         return totalWeight - usedWeight;
     }
 
@@ -219,7 +219,7 @@ contract IncentiveVoting is Ownable {
             usedWeight += weight;
         }
 
-        uint256 totalWeight = tokenLocker.userWeight(msg.sender);
+        uint256 totalWeight = tokenLocker.userWeight(msg.sender) / 1e18;
         require(usedWeight <= totalWeight, "Available weight exceeded");
         userVotes[msg.sender][week] = usedWeight;
 
