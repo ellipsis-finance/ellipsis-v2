@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
 interface IIncentiveVoting {
-    function getPoolRewardsPerSecond(address _pool, uint256 _week) external view returns (uint256);
+    function getRewardsPerSecond(address _pool, uint256 _week) external view returns (uint256);
     function startTime() external view returns (uint256);
 }
 
@@ -163,7 +163,7 @@ contract EllipsisLpStaking {
         uint256 currentWeek = (block.timestamp - start) / 604800;
 
         if (lpSupply == 0) {
-            return (0, incentiveVoting.getPoolRewardsPerSecond(_token, currentWeek));
+            return (0, incentiveVoting.getRewardsPerSecond(_token, currentWeek));
         }
 
         uint256 lastRewardTime = pool.lastRewardTime;
@@ -177,7 +177,7 @@ contract EllipsisLpStaking {
                 duration = nextRewardTime - lastRewardTime;
                 reward = reward + duration * rewardsPerSecond;
                 rewardWeek += 1;
-                rewardsPerSecond = incentiveVoting.getPoolRewardsPerSecond(_token, rewardWeek);
+                rewardsPerSecond = incentiveVoting.getRewardsPerSecond(_token, rewardWeek);
                 lastRewardTime = nextRewardTime;
             }
         }

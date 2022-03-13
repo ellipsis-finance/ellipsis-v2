@@ -224,8 +224,9 @@ contract IncentiveVoting is Ownable {
         require(week > 1, "Cannot make vote in first week");
 
         // verify that claiming admin fees works for the pool associated with
-        // this LP token. if the call does not work, the token is likely not
-        // an LP token or contains an incompatible asset.
+        // this LP token. we verify this behaviour now to avoid later isssues
+        // in `EllipsisLpStaking.claim` if the token does not belong to a pool
+        // or contains an incompatible asset.
         address pool = IERC20Mintable(_token).minter();
         IStableSwap(pool).withdraw_admin_fees();
 
@@ -298,7 +299,12 @@ contract IncentiveVoting is Ownable {
         );
     }
 
-    function getPoolRewardsPerSecond(address _token, uint256 _week) external view returns (uint256) {
+    /**
+        @dev Calculate and return the rewards per second for a given LP token.
+             Called by `EllipsisLpStaker` when determining the emissions that each
+             pool is entitled to.
+     */
+    function getRewardsPerSecond(address _token, uint256 _week) external view returns (uint256) {
         uint256 votes = tokenVotes[_token][_week];
         if (votes == 0) return 0;
         return rewardsPerSecond[_week / 4] * votes / totalVotes[_week];
