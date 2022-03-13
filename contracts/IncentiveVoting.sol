@@ -69,7 +69,8 @@ contract IncentiveVoting is Ownable {
     ITokenLocker public tokenLocker;
     ILpStaking public lpStaking;
 
-    mapping(address => bool) approvedTokens;
+    mapping(address => bool) isApproved;
+    address[] public approvedTokens;
 
     // Total amount of the protocol token distributed each week.
     // Each week a new value is pushed onto the array.
@@ -188,7 +189,7 @@ contract IncentiveVoting is Ownable {
         for (uint i = 0; i < _tokens.length; i++) {
             address token = _tokens[i];
             uint256 weight = _weights[i];
-            require(approvedTokens[token], "Not approved for incentives");
+            require(isApproved[token], "Not approved for incentives");
             tokenVotes[token][week] += weight;
             totalVotes[week] += weight;
             usedWeight += weight;
@@ -219,7 +220,7 @@ contract IncentiveVoting is Ownable {
         external
         returns (uint256 _voteIndex)
     {
-        require(!approvedTokens[_token], "Already approved");
+        require(!isApproved[_token], "Already approved");
         uint256 week = getWeek();
         require(week > 1, "Cannot make vote in first week");
 
@@ -277,15 +278,15 @@ contract IncentiveVoting is Ownable {
         TokenApprovalVote storage vote = tokenApprovalVotes[_voteIndex];
         require(!hasVoted[_voteIndex][msg.sender], "Already voted");
         require(vote.startTime > block.timestamp - WEEK, "Vote has ended");
-        require(!approvedTokens[vote.token], "Already approved");
+        require(!isApproved[vote.token], "Already approved");
 
         hasVoted[_voteIndex][msg.sender] = true;
         uint256 weight = tokenLocker.weeklyWeightOf(msg.sender, vote.week);
         vote.givenWeight = vote.givenWeight + weight;
 
-        bool isApproved = vote.givenWeight >= vote.requiredWeight;
-        if (isApproved) {
-            approvedTokens[vote.token] = true;
+        if (vote.givenWeight >= vote.requiredWeight) {
+            isApproved[vote.token] = true;
+            approvedTokens.push(vote.token);
             lpStaking.addPool(vote.token);
         }
 
@@ -295,7 +296,7 @@ contract IncentiveVoting is Ownable {
             weight,
             vote.givenWeight,
             vote.requiredWeight,
-            isApproved
+            isApproved[vote.token]
         );
     }
 
@@ -328,11 +329,11 @@ contract IncentiveVoting is Ownable {
      */
 
     function setTokenApproval(address _token, bool _isApproved) external onlyOwner {
-        if (!approvedTokens[_token]) {
+        if (!isApproved[_token]) {
             (,uint256 lastRewardTime,) = lpStaking.poolInfo(_token);
             require(lastRewardTime != 0, "Token must be voted in");
         }
-        approvedTokens[_token] = _isApproved;
+        isApproved[_token] = _isApproved;
     }
 
 }
