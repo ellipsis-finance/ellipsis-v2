@@ -39,6 +39,11 @@ contract IncentiveVoting is Ownable {
         uint256 givenWeight;
     }
 
+    struct Vote {
+        address token;
+        uint256 votes;
+    }
+
     // token -> week -> weight allocated
     mapping(address => mapping(uint256 => uint256)) public tokenVotes;
 
@@ -131,9 +136,28 @@ contract IncentiveVoting is Ownable {
         return tokenApprovalVotes.length;
     }
 
+    function approvedTokensLength() external view returns (uint256) {
+        return approvedTokens.length;
+    }
+
     function getWeek() public view returns (uint256) {
         if (startTime >= block.timestamp) return 0;
         return (block.timestamp - startTime) / 604800;
+    }
+
+    /**
+        @notice Get data on the current votes made in the active week
+        @return _totalVotes Total number of votes this week for all pools
+        @return _voteData Dynamic array of (token address, votes for token)
+     */
+    function getCurrentVotes() external view returns (uint256 _totalVotes, Vote[] memory _voteData) {
+        _voteData = new Vote[](approvedTokens.length);
+        uint256 week = getWeek();
+        for (uint i = 0; i < _voteData.length; i++) {
+            address token = approvedTokens[i];
+            _voteData[i] = Vote({token: token, votes: tokenVotes[token][week]});
+        }
+        return (totalVotes[week], _voteData);
     }
 
     /**
