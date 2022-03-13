@@ -119,9 +119,7 @@ contract IncentiveVoting is Ownable {
     ) {
         tokenApprovalQuorumPct = _quorumPct;
         tokenLocker = _tokenLocker;
-        // start at +1 week to handle the default value in `lastRewardedWeek`
-        // without this, tokens would not receive emissions in the first week
-        startTime = _tokenLocker.startTime() - WEEK;
+        startTime = _tokenLocker.startTime();
 
         rewardsPerSecond.push(_initialRewardsPerSecond);
     }
@@ -239,8 +237,9 @@ contract IncentiveVoting is Ownable {
         returns (uint256 _voteIndex)
     {
         require(!isApproved[_token], "Already approved");
+        // wait 2 weeks to allow approval votes, to ensure sufficient locked balances
         uint256 week = getWeek();
-        require(week > 1, "Cannot make vote in first week");
+        require(week > 1, "Cannot make vote in first two weeks");
 
         // verify that claiming admin fees works for the pool associated with
         // this LP token. we verify this behaviour now to avoid later isssues
@@ -251,7 +250,6 @@ contract IncentiveVoting is Ownable {
 
         week -= 2;
         uint256 weight = tokenLocker.weeklyWeightOf(msg.sender, week);
-
         // minimum weight of 50,000 and max one vote per week to prevent spamming votes
         require(weight >= 50000 * 10**18, "Not enough weight");
         require(
