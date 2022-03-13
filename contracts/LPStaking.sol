@@ -238,6 +238,7 @@ contract EllipsisLpStaking {
 
     // Deposit LP tokens into the contract. Also triggers a claim.
     function deposit(address _receiver, address _token, uint256 _amount) external {
+        require(_amount > 0, "Cannot deposit zero");
         if (msg.sender != _receiver) {
             require(!blockThirdPartyActions[_receiver], "Cannot deposit on behalf of this account");
         }
@@ -262,6 +263,7 @@ contract EllipsisLpStaking {
 
     // Withdraw LP tokens. Also triggers a claim.
     function withdraw(address _receiver, address _token, uint256 _amount) external {
+        require(_amount > 0, "Cannot withdraw zero");
         uint256 accRewardPerShare = _updatePool(_token);
         UserInfo storage user = userInfo[_token][msg.sender];
         uint256 depositAmount = user.depositAmount;
