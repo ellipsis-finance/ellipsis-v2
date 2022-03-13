@@ -40,7 +40,7 @@ contract IncentiveVoting is Ownable {
     }
 
     // token -> week -> weight allocated
-    mapping(address => mapping(uint256 => uint256)) public poolVotes;
+    mapping(address => mapping(uint256 => uint256)) public tokenVotes;
 
     // user -> week -> weight used
     mapping(address => mapping(uint256 => uint256)) public userVotes;
@@ -48,7 +48,7 @@ contract IncentiveVoting is Ownable {
     // week -> total weight allocated
     mapping(uint256 => uint256) public totalVotes;
 
-    // pool -> last week rewards were distributed
+    // token -> last week rewards were distributed
     mapping(address => uint256) public lastRewardedWeek;
 
     // data about token approval votes
@@ -93,10 +93,10 @@ contract IncentiveVoting is Ownable {
         bool isApproved
     );
 
-    event VotedForPoolIncentives(
+    event VotedForIncentives(
         address indexed voter,
-        address indexed pool,
-        uint256 voteWeight,
+        address[] tokens,
+        uint256[] weights,
         uint256 usedWeight,
         uint256 totalWeight
     );
@@ -115,7 +115,7 @@ contract IncentiveVoting is Ownable {
         tokenApprovalQuorumPct = _quorumPct;
         tokenLocker = _tokenLocker;
         // start at +1 week to handle the default value in `lastRewardedWeek`
-        // without this, pools would not receive emissions in the first week
+        // without this, tokens would not receive emissions in the first week
         startTime = _tokenLocker.startTime() - WEEK;
 
         rewardsPerSecond.push(_initialRewardsPerSecond);
@@ -152,7 +152,7 @@ contract IncentiveVoting is Ownable {
     }
 
     /**
-        @notice Allocate weight toward a pool to receive protocol incentives in the following week
+        @notice Allocate weight toward LP tokens to receive emissions in the following week
         @dev A user may vote as many times as they like within a week, so long as their total
              available weight is not exceeded. If they receive additional weight by locking more
              tokens within `tokenLocker`, they can vote immediately.
@@ -160,14 +160,14 @@ contract IncentiveVoting is Ownable {
              Vote weight can only be added - not modified or removed. Votes only apply to the
              following week - they do not carry over. A user must resubmit their vote each
              week.
-        @param _pool Address of the pool to vote for
-        @param _weight Amount of weight to allocated to this pool. This value is additive,
-                       it does not include previous votes. For example, if you have already
-                       allocated a weight of 100 and wish to allocated a total of 300,
-                       `_weight` should be given as 200.
+        @param _tokens List of addresses of LP tokens to vote for
+        @param _weights Weight to allocate to `_tokens`. Values are additive, they do
+                        not include previous votes. For example, if you have already
+                        allocated a weight of 100 and wish to allocated a total of 300,
+                        `_weight` should be given as 200.
      */
-    function voteForPool(address _pool, uint256 _weight) external {
-        require(approvedTokens[_pool], "Not approved for incentives");
+    function vote(address[] calldata _tokens, uint256[] calldata _weights) external {
+        require(_tokens.length == _weights.length, "Input length mismatch");
 
         // update rewards per second, if required
         uint256 week = getWeek();
@@ -182,19 +182,26 @@ contract IncentiveVoting is Ownable {
         }
 
         // make sure user has not exceeded available weight
-        uint256 usedWeight = userVotes[msg.sender][week] + _weight;
-        uint256 totalWeight = tokenLocker.userWeight(msg.sender);
-        require(usedWeight <= totalWeight, "Available weight exceeded");
+        uint256 usedWeight = userVotes[msg.sender][week];
 
         // update accounting for this week's votes
-        poolVotes[_pool][week] = poolVotes[_pool][week] + _weight;
-        userVotes[msg.sender][week] = usedWeight;
-        totalVotes[week] = totalVotes[week] + _weight;
+        for (uint i = 0; i < _tokens.length; i++) {
+            address token = _tokens[i];
+            uint256 weight = _weights[i];
+            require(approvedTokens[token], "Not approved for incentives");
+            tokenVotes[token][week] += weight;
+            totalVotes[week] += weight;
+            usedWeight += weight;
+        }
 
-        emit VotedForPoolIncentives(
+        uint256 totalWeight = tokenLocker.userWeight(msg.sender);
+        require(usedWeight <= totalWeight, "Available weight exceeded");
+        userVotes[msg.sender][week] = usedWeight;
+
+        emit VotedForIncentives(
             msg.sender,
-            _pool,
-            _weight,
+            _tokens,
+            _weights,
             usedWeight,
             totalWeight
         );
@@ -291,8 +298,8 @@ contract IncentiveVoting is Ownable {
         );
     }
 
-    function getPoolRewardsPerSecond(address _pool, uint256 _week) external view returns (uint256) {
-        uint256 votes = poolVotes[_pool][_week];
+    function getPoolRewardsPerSecond(address _token, uint256 _week) external view returns (uint256) {
+        uint256 votes = tokenVotes[_token][_week];
         if (votes == 0) return 0;
         return rewardsPerSecond[_week / 4] * votes / totalVotes[_week];
     }
