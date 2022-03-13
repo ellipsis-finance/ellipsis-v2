@@ -69,6 +69,9 @@ contract EllipsisLpStaking {
     // `deposit` or `claim` on behalf of an account
     mapping(address => bool) public blockThirdPartyActions;
 
+    // token => timestamp of last admin fee claim for the related pool
+    // admin fees are claimed once per day when a user claims pending
+    // rewards for the lp token
     mapping(address => uint256) public lastFeeClaim;
 
     IERC20Mintable public immutable rewardToken;
@@ -81,14 +84,12 @@ contract EllipsisLpStaking {
         address indexed token,
         uint256 amount
     );
-
     event Withdraw(
         address indexed caller,
         address indexed receiver,
         address indexed token,
         uint256 amount
     );
-
     event EmergencyWithdraw(
         address indexed token,
         address indexed user,
@@ -119,6 +120,17 @@ contract EllipsisLpStaking {
         }
     }
 
+    /**
+        @notice The current number of stakeable LP tokens
+     */
+    function poolLength() external view returns (uint256) {
+        return registeredTokens.length;
+    }
+
+    /**
+        @notice Add a new token that may be staked within this contract
+        @dev Called by `IncentiveVoting` after a successful token approval vote
+     */
     function addPool(address _token) external returns (bool) {
         require(msg.sender == address(incentiveVoting));
         require(poolInfo[_token].lastRewardTime == 0);
@@ -127,18 +139,33 @@ contract EllipsisLpStaking {
         return true;
     }
 
+    /**
+        @notice Set the claim receiver address for the caller
+        @dev When the claim receiver is not == address(0), all
+             emission claims are transferred to this address
+        @param _receiver Claim receiver address
+     */
     function setClaimReceiver(address _receiver) external {
         claimReceiver[msg.sender] = _receiver;
     }
 
+    /**
+        @notice Allow or block third-party calls to deposit, withdraw
+                or claim rewards on behalf of the caller
+     */
     function setBlockThirdPartyActions(bool _block) external {
         blockThirdPartyActions[msg.sender] = _block;
     }
 
-    function poolLength() external view returns (uint256) {
-        return registeredTokens.length;
-    }
-
+    /**
+        @notice Get the current number of unclaimed rewards for a user on one or more tokens
+        @dev The Returned values are only for rewards earned after the last interaction with
+             this contract. When a user deposits or withdraws, pending rewards for that token
+             are added to `userBaseClaimable(_user)`.
+        @param _user User to query pending rewards for
+        @param _tokens Array of token addresses to query
+        @return uint256[] Unclaimed rewards
+     */
     function claimableReward(address _user, address[] calldata _tokens)
         external
         view
@@ -156,6 +183,7 @@ contract EllipsisLpStaking {
         return claimable;
     }
 
+    // Get updated reward data for the given token
     function _getRewardData(address _token) internal view returns (uint256 accRewardPerShare, uint256 rewardsPerSecond) {
         PoolInfo storage pool = poolInfo[_token];
         uint256 lpSupply = pool.adjustedSupply;
@@ -203,20 +231,8 @@ contract EllipsisLpStaking {
         return accRewardPerShare;
     }
 
-    function _mint(address _user, uint256 _amount) internal {
-        uint256 minted = mintedTokens;
-        if (minted + _amount > maxMintableTokens) {
-            _amount = maxMintableTokens - minted;
-        }
-        if (_amount > 0) {
-            mintedTokens = minted + _amount;
-            address receiver = claimReceiver[_user];
-            if (receiver == address(0)) receiver = _user;
-            rewardToken.mint(receiver, _amount);
-        }
-    }
-
     // calculate adjusted balance and total supply, used for boost
+    // boost calculations are modeled after veCRV, with a max boost of 2.5x
     function _updateLiquidityLimits(address _user, address _token, uint256 _depositAmount, uint256 _accRewardPerShare) internal {
         uint256 userWeight = tokenLocker.userWeight(_user);
         uint256 adjustedAmount = _depositAmount * 40 / 100;
@@ -236,7 +252,15 @@ contract EllipsisLpStaking {
         user.rewardDebt = adjustedAmount * _accRewardPerShare / 1e12;
     }
 
-    // Deposit LP tokens into the contract. Also triggers a claim.
+    /**
+        @notice Deposit LP tokens into the contract
+        @dev Also updates the receiver's current boost
+        @param _receiver Address to deposit for. Reverts if the caller is not the
+                         receiver and the receiver has blocked third-party actions.
+        @param _token LP token address to deposit.
+        @param _amount Amount of tokens to deposit. Tokens are transferred from the caller.
+                       Reverts if the amount is zero or the amount exceeds the caller's balance.
+     */
     function deposit(address _receiver, address _token, uint256 _amount) external {
         require(_amount > 0, "Cannot deposit zero");
         if (msg.sender != _receiver) {
@@ -261,7 +285,15 @@ contract EllipsisLpStaking {
         emit Deposit(msg.sender, _receiver, _token, _amount);
     }
 
-    // Withdraw LP tokens. Also triggers a claim.
+    /**
+        @notice Withdraw LP tokens from the contract
+        @dev Also updates the caller's current boost
+        @param _receiver Address to send the withdrawn tokens to.
+        @param _token LP token address to withdraw.
+        @param _amount Amount of tokens to withdraw. Tokens are taken from the deposited
+                       balance of the caller. Reverts if the amount is zero or the amount
+                       exceeds the caller's deposited balance.
+     */
     function withdraw(address _receiver, address _token, uint256 _amount) external {
         require(_amount > 0, "Cannot withdraw zero");
         uint256 accRewardPerShare = _updatePool(_token);
@@ -280,7 +312,13 @@ contract EllipsisLpStaking {
         emit Withdraw(msg.sender, _receiver, _token, _amount);
     }
 
-    // Withdraw without caring about rewards. EMERGENCY ONLY.
+    /**
+        @notice Withdraw a user's complete deposited balance of an LP token
+                without updating rewards calculations.
+        @dev Should be used only in an emergency when there is an error in
+             the reward math that prevents a normal withdrawal.
+        @param _token LP token address to withdraw.
+     */
     function emergencyWithdraw(address _token) external {
         UserInfo storage user = userInfo[_token][msg.sender];
 
@@ -290,12 +328,20 @@ contract EllipsisLpStaking {
         emit EmergencyWithdraw(_token, msg.sender, amount);
     }
 
-    // Claim pending rewards for one or more pools.
-    // Rewards are not received directly, they are minted by the rewardMinter.
+    /**
+        @notice Claim pending rewards for one or more tokens for a user.
+        @dev Also updates the claimer's boost.
+        @param _user Address to claim rewards for. Reverts if the caller is not the
+                     claimer and the claimer has blocked third-party actions.
+        @param _tokens Array of LP token addresses to claim for. Rewards in `userBaseClaimable`
+                       are always claimed, even if this array is left empty.
+     */
     function claim(address _user, address[] calldata _tokens) external {
         if (msg.sender != _user) {
             require(!blockThirdPartyActions[_user], "Cannot claim on behalf of this account");
         }
+
+        // calculate claimable amount
         uint256 pending = userBaseClaimable[_user];
         userBaseClaimable[_user] = 0;
         for (uint i = 0; i < _tokens.length; i++) {
@@ -317,9 +363,25 @@ contract EllipsisLpStaking {
                 lastFeeClaim[token] = block.timestamp;
             }
         }
-        _mint(_user, pending);
+
+        // mint the claimable tokens for the user
+        uint256 minted = mintedTokens;
+        if (minted + pending > maxMintableTokens) {
+            pending = maxMintableTokens - minted;
+        }
+        if (pending > 0) {
+            mintedTokens = minted + pending;
+            address receiver = claimReceiver[_user];
+            if (receiver == address(0)) receiver = _user;
+            rewardToken.mint(receiver, pending);
+        }
     }
 
+    /**
+        @notice Update a user's boost for one or more deposited tokens
+        @param _user Address of the user to update boosts for
+        @param _tokens Array of LP tokens to update boost for
+     */
     function updateUserBoosts(address _user, address[] calldata _tokens) external {
         for (uint i = 0; i < _tokens.length; i++) {
             address token = _tokens[i];
