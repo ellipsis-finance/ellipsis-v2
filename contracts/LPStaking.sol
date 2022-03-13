@@ -34,8 +34,8 @@ contract EllipsisLpStaking {
 
     // Info of each user.
     struct UserInfo {
-        uint256 depositAmount;
-        uint256 adjustedAmount;
+        uint256 depositAmount;  // The amount of tokens deposited into the contract.
+        uint256 adjustedAmount; // The user's effective balance after boosting, used to calculate emission rates.
         uint256 rewardDebt;
     }
     // Info of each pool.
@@ -282,8 +282,7 @@ contract EllipsisLpStaking {
     function emergencyWithdraw(address _token) external {
         UserInfo storage user = userInfo[_token][msg.sender];
         uint256 amount = user.depositAmount;
-        user.depositAmount = 0;
-        user.rewardDebt = 0;
+        delete userInfo[_token][msg.sender];
         IERC20(_token).safeTransfer(address(msg.sender), amount);
         emit EmergencyWithdraw(_token, msg.sender, amount);
     }
