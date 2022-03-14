@@ -39,35 +39,30 @@ def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, charlie,
         # assert the token was approved
         assert voter.isApproved(lp_tokens[index]) == True
 
-
 def test_equal_rewards(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, charlie, dan):
-    # print('Stake in week:', voter.getWeek())
-    lp_staker.deposit(alice, lp_tokens[0], 100000 * 10 ** 18, {"from": alice})
-    lp_staker.deposit(bob, lp_tokens[0], 100000 * 10 ** 18, {"from": bob})
-    lp_staker.deposit(charlie, lp_tokens[0], 100000 * 10 ** 18, {"from": charlie})
-    lp_staker.deposit(dan, lp_tokens[0], 100000 * 10 ** 18, {"from": dan})
-    lp_staker.claim(alice, [lp_tokens[0]], {"from": alice})
-    lp_staker.claim(bob, [lp_tokens[0]], {"from": bob})
-    lp_staker.claim(charlie, [lp_tokens[0]], {"from": charlie})
-    lp_staker.claim(dan, [lp_tokens[0]], {"from": dan})
+    # stake. then claim before any voting week to update each user's boost
+    for acct in [alice, bob, charlie, dan]:
+        lp_staker.deposit(acct, lp_tokens[0], 100000 * 10 ** 18, {"from": acct})
 
+    for acct in [alice, bob, charlie, dan]:
+        lp_staker.claim(acct, [lp_tokens[0]], {"from": acct})
+   
     # move ahead to a votable week
     chain.mine(timedelta=86400 * 7)
-    # print('Vote in week:', voter.getWeek())
+    # Alice votes for a gauge to get emissions
     voter.vote([lp_tokens[0]], [voter.availableVotes(alice)], {"from": alice})
     # move ahead to rewards week
     chain.mine(timedelta=86400 * 7)
 
+    # for nomalizing the gains.
     eps_alice0 = eps2.balanceOf(alice, {"from": alice})
     eps_bob0 = eps2.balanceOf(bob, {"from": bob})
     eps_charlie0 = eps2.balanceOf(charlie, {"from": charlie})
     eps_dan0 = eps2.balanceOf(dan, {"from": dan})
-    # chain.mine(timedelta=86400 * 7)
-    # print('Claim in week:', voter.getWeek())
-    lp_staker.claim(alice, [lp_tokens[0]], {"from": alice})
-    lp_staker.claim(bob, [lp_tokens[0]], {"from": bob})
-    lp_staker.claim(charlie, [lp_tokens[0]], {"from": charlie})
-    lp_staker.claim(dan, [lp_tokens[0]], {"from": dan})
+
+    # claim and then calculate the gains
+    for acct in [alice, bob, charlie, dan]:
+        lp_staker.claim(acct, [lp_tokens[0]], {"from": acct})
 
     eps_alice1 = eps2.balanceOf(alice, {"from": alice})
     eps_bob1 = eps2.balanceOf(bob, {"from": bob})
@@ -118,15 +113,12 @@ def test_boost_calculation_alice_versus_dan(lp_staker, lp_tokens, locker, eps2, 
 
 
 def test_boost_four_players(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, charlie, dan):
-    # print('Stake in week:', voter.getWeek())
-    lp_staker.deposit(alice, lp_tokens[0], 100000 * 10 ** 18, {"from": alice})
-    lp_staker.deposit(bob, lp_tokens[0], 100000 * 10 ** 18, {"from": bob})
-    lp_staker.deposit(charlie, lp_tokens[0], 100000 * 10 ** 18, {"from": charlie})
-    lp_staker.deposit(dan, lp_tokens[0], 100000 * 10 ** 18, {"from": dan})
-    lp_staker.claim(alice, [lp_tokens[0]], {"from": alice})
-    lp_staker.claim(bob, [lp_tokens[0]], {"from": bob})
-    lp_staker.claim(charlie, [lp_tokens[0]], {"from": charlie})
-    lp_staker.claim(dan, [lp_tokens[0]], {"from": dan})
+    for acct in [alice, bob, charlie, dan]:
+        lp_staker.deposit(acct, lp_tokens[0], 100000 * 10 ** 18, {"from": acct})
+
+    for acct in [alice, bob, charlie, dan]:
+        lp_staker.claim(acct, [lp_tokens[0]], {"from": acct})
+   
 
     # move ahead to a votable week
     chain.mine(timedelta=86400 * 7)
@@ -141,10 +133,8 @@ def test_boost_four_players(lp_staker, lp_tokens, locker, eps2, voter, alice, bo
     eps_charlie0 = eps2.balanceOf(charlie, {"from": charlie})
     eps_dan0 = eps2.balanceOf(dan, {"from": dan})
 
-    lp_staker.claim(alice, [lp_tokens[0]], {"from": alice})
-    lp_staker.claim(bob, [lp_tokens[0]], {"from": bob})
-    lp_staker.claim(charlie, [lp_tokens[0]], {"from": charlie})
-    lp_staker.claim(dan, [lp_tokens[0]], {"from": dan})
+    for acct in [alice, bob, charlie, dan]:
+        lp_staker.claim(acct, [lp_tokens[0]], {"from": acct})
 
     eps_alice1 = eps2.balanceOf(alice, {"from": alice})
     eps_bob1 = eps2.balanceOf(bob, {"from": bob})
