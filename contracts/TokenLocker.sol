@@ -13,18 +13,21 @@ contract TokenLocker {
         uint256 claimed;
     }
 
+    struct LockData {
+        uint128 weight;
+        uint128 unlock;
+    }
+
     // `weeklyTotalWeight` and `weeklyWeightOf` track the total lock weight for each week,
     // calculated as the sum of [number of tokens] * [weeks to unlock] for all active locks.
     // The array index corresponds to the number of the epoch week.
-    uint256[9362] public weeklyTotalWeight;
-    mapping(address => uint256[9362]) public weeklyWeightOf;
+    uint128[9362] public weeklyTotalWeight;
 
-    // `weeklyUnlocksOf` tracks the actual deposited token balances. Any non-zero value
-    // stored at an index < `getWeek` is considered unlocked and may be withdrawn
-    mapping(address => uint256[9362]) public weeklyUnlocksOf;
+    // `weeklyLockData` tracks the total lock weights and unlockable token balances for each user.
+    mapping(address => LockData[9362]) weeklyLockData;
 
     // `withdrawnUntil` tracks the most recent week for which each user has withdrawn their
-    // expired token locks. Values in `weeklyUnlocksOf` with an index less than the related
+    // expired token locks. Unlock values in `weeklyLockData` with an index less than the related
     // value within `withdrawnUntil` have already been withdrawn.
     mapping(address => uint256) withdrawnUntil;
 
@@ -82,7 +85,21 @@ contract TokenLocker {
         @notice Get the current lock weight for a user
      */
     function userWeight(address _user) external view returns (uint256) {
-        return weeklyWeightOf[_user][getWeek()];
+        return uint256(weeklyLockData[_user][getWeek()].weight);
+    }
+
+    /**
+        @notice Get the lock weight for a user in a given week
+     */
+    function weeklyWeightOf(address _user, uint256 _week) external view returns (uint256) {
+        return uint256(weeklyLockData[_user][_week].weight);
+    }
+
+    /**
+        @notice Get the token balance that unlocks for a user in a given week
+     */
+    function weeklyUnlocksOf(address _user, uint256 _week) external view returns (uint256) {
+        return uint256(weeklyLockData[_user][_week].unlock);
     }
 
     /**
@@ -97,7 +114,7 @@ contract TokenLocker {
         uint256 i = withdrawnUntil[_user] + 1;
         uint256 finish = getWeek() + MAX_LOCK_WEEKS + 1;
         while (i < finish) {
-            balance += weeklyUnlocksOf[_user][i];
+            balance += weeklyLockData[_user][i].unlock;
             i++;
         }
         return balance;
@@ -114,7 +131,7 @@ contract TokenLocker {
         @notice Get the user lock weight and total lock weight for the given week
      */
     function weeklyWeight(address _user, uint256 _week) external view returns (uint256, uint256) {
-        return (weeklyWeightOf[_user][_week], weeklyTotalWeight[_week]);
+        return (weeklyLockData[_user][_week].weight, weeklyTotalWeight[_week]);
     }
 
     /**
@@ -130,13 +147,13 @@ contract TokenLocker {
         uint256 length = 0;
         uint256 week = getWeek();
         for (uint256 i = week + 1; i < week + MAX_LOCK_WEEKS + 1; i++) {
-            if (weeklyUnlocksOf[_user][i] > 0) length++;
+            if (weeklyLockData[_user][i].unlock > 0) length++;
         }
         lockData = new uint256[2][](length);
         uint256 x = 0;
         for (uint256 i = week + 1; i < week + MAX_LOCK_WEEKS + 1; i++) {
-            if (weeklyUnlocksOf[_user][i] > 0) {
-                lockData[x] = [i - week, weeklyUnlocksOf[_user][i]];
+            if (weeklyLockData[_user][i].unlock > 0) {
+                lockData[x] = [i - week, weeklyLockData[_user][i].unlock];
                 x++;
             }
         }
@@ -168,11 +185,10 @@ contract TokenLocker {
         stakingToken.safeTransferFrom(msg.sender, address(this), _amount);
 
         uint256 start = getWeek();
-        _increaseAmount(weeklyTotalWeight, start, _amount, _weeks, 0);
-        _increaseAmount(weeklyWeightOf[_user], start, _amount, _weeks, 0);
+        _increaseAmount(_user, start, _amount, _weeks, 0);
 
         uint256 end = start + _weeks;
-        weeklyUnlocksOf[_user][end] = weeklyUnlocksOf[_user][end] + _amount;
+        weeklyLockData[_user][end].unlock += uint128(_amount);
 
         emit NewLock(_user, _amount, _weeks);
         return true;
@@ -198,22 +214,14 @@ contract TokenLocker {
         require(_weeks < _newWeeks, "newWeeks must be greater than weeks");
         require(_amount > 0, "Amount must be nonzero");
 
-        uint256[9362] storage unlocks = weeklyUnlocksOf[msg.sender];
+        LockData[9362] storage data = weeklyLockData[msg.sender];
         uint256 start = getWeek();
         uint256 end = start + _weeks;
-        unlocks[end] = unlocks[end] - _amount;
+        data[end].unlock -= uint128(_amount);
         end = start + _newWeeks;
-        unlocks[end] = unlocks[end] + _amount;
+        data[end].unlock += uint128(_amount);
 
-        _increaseAmount(weeklyTotalWeight, start, _amount, _newWeeks, _weeks);
-        _increaseAmount(
-            weeklyWeightOf[msg.sender],
-            start,
-            _amount,
-            _newWeeks,
-            _weeks
-        );
-
+        _increaseAmount(msg.sender, start, _amount, _newWeeks, _weeks);
         emit ExtendLock(msg.sender, _amount, _weeks, _newWeeks);
         return true;
     }
@@ -268,7 +276,7 @@ contract TokenLocker {
     function streamableBalance(address _user) public view returns (uint256) {
         uint256 finishedWeek = getWeek();
 
-        uint256[9362] storage unlocks = weeklyUnlocksOf[_user];
+        LockData[9362] storage data = weeklyLockData[_user];
         uint256 amount;
 
         for (
@@ -276,7 +284,7 @@ contract TokenLocker {
             last <= finishedWeek;
             last++
         ) {
-            amount = amount + unlocks[last];
+            amount = amount + data[last].unlock;
         }
         return amount;
     }
@@ -303,7 +311,7 @@ contract TokenLocker {
         @dev Increase the amount within a lock weight array over a given time period
      */
     function _increaseAmount(
-        uint256[9362] storage _record,
+        address _user,
         uint256 _start,
         uint256 _amount,
         uint256 _rounds,
@@ -316,7 +324,8 @@ contract TokenLocker {
             if (i < oldEnd) {
                 amount -= _amount * (oldEnd - i);
             }
-            _record[i] += amount;
+            weeklyTotalWeight[i] += uint128(amount);
+            weeklyLockData[_user][i].weight += uint128(amount);
         }
     }
 
