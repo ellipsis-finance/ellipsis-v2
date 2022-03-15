@@ -132,7 +132,7 @@ contract EllipsisLpStaking {
         @dev Called by `IncentiveVoting` after a successful token approval vote
      */
     function addPool(address _token) external returns (bool) {
-        require(msg.sender == address(incentiveVoting));
+        require(msg.sender == address(incentiveVoting), "Sender not incentiveVoting");
         require(poolInfo[_token].lastRewardTime == 0);
         registeredTokens.push(_token);
         poolInfo[_token].lastRewardTime = block.timestamp;

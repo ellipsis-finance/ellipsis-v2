@@ -102,10 +102,10 @@ contract EllipsisToken2 is IERC20 {
     }
 
     function mint(address _to, uint256 _value) external returns (bool) {
-        require(minters[msg.sender]);
+        require(minters[msg.sender], "Not a minter");
         balanceOf[_to] += _value;
         totalSupply += _value;
-        require(maxTotalSupply >= totalSupply);
+        require(maxTotalSupply >= totalSupply, "Max supply");
         emit Transfer(address(0), _to, _value);
         return true;
     }

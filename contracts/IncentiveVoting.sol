@@ -73,7 +73,7 @@ contract IncentiveVoting is Ownable {
     ITokenLocker public tokenLocker;
     ILpStaking public lpStaking;
 
-    mapping(address => bool) isApproved;
+    mapping(address => bool) public isApproved;
     address[] public approvedTokens;
 
     // Total amount of the protocol token distributed each week.
