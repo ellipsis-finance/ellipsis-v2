@@ -328,8 +328,13 @@ contract IncentiveVoting is Ownable {
              pool is entitled to.
      */
     function getRewardsPerSecond(address _token, uint256 _week) external view returns (uint256) {
+        if (_week == 0) return 0;
+        // weekly rewards are calculated based on the previous week's votes
+        _week -= 1;
+
         uint256 votes = tokenVotes[_token][_week];
         if (votes == 0) return 0;
+
         return rewardsPerSecond[_week / 4] * votes / totalVotes[_week];
     }
 
