@@ -124,9 +124,15 @@ contract IncentiveVoting is Ownable {
         rewardsPerSecond.push(_initialRewardsPerSecond);
     }
 
-    function setLpStaking(ILpStaking _lpStaking) external {
+    function setLpStaking(ILpStaking _lpStaking, address[] memory _initialApprovedTokens) external {
         require(address(lpStaking) == address(0));
         lpStaking = _lpStaking;
+        for (uint i = 0; i < _initialApprovedTokens.length; i++) {
+            address token = _initialApprovedTokens[i];
+            isApproved[token] = true;
+            approvedTokens.push(token);
+            _lpStaking.addPool(token);
+        }
     }
 
     function tokenApprovalVotesLength() external view returns (uint256) {

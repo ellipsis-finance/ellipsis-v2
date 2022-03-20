@@ -41,10 +41,10 @@ def main():
     locker = TokenLocker.deploy(token, START_TIME, MAX_LOCK_WEEKS, {'from': acct})
     voter = IncentiveVoting.deploy(locker, INITIAL_REWARDS_PER_SECOND, QUORUM_PCT, {'from': acct})
     fee_distro = FeeDistributor.deploy(locker, {'from': acct})
-    staking = EllipsisLpStaking.deploy(token, voter, locker, MAX_MINTABLE, INITIAL_POOLS, {'from': acct})
+    staking = EllipsisLpStaking.deploy(token, voter, locker, MAX_MINTABLE, {'from': acct})
 
     # set addresses
-    voter.setLpStaking(staking, {'from': acct})
+    voter.setLpStaking(staking, INITIAL_POOLS, {'from': acct})
     factory.set_fee_receiver(fee_distro, {'from': acct})
     token.setMinters([staking], {'from': acct})  # TODO merkle distributor is also a minter
 

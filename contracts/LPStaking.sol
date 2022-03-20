@@ -102,8 +102,7 @@ contract EllipsisLpStaking {
         IERC20Mintable _rewardToken,
         IIncentiveVoting _incentiveVoting,
         ITokenLocker _tokenLocker,
-        uint256 _maxMintable,
-        address[] memory _initialPools
+        uint256 _maxMintable
     )
     {
         startTime = _incentiveVoting.startTime();
@@ -111,13 +110,6 @@ contract EllipsisLpStaking {
         incentiveVoting = _incentiveVoting;
         tokenLocker = _tokenLocker;
         maxMintableTokens = _maxMintable;
-
-        for (uint256 i = 0; i < _initialPools.length; i++) {
-            address token = _initialPools[i];
-            require(poolInfo[token].lastRewardTime == 0);
-            registeredTokens.push(token);
-            poolInfo[token].lastRewardTime = block.timestamp;
-        }
     }
 
     /**
