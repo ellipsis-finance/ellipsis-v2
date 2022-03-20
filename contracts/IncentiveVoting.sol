@@ -16,7 +16,7 @@ interface ITokenLocker {
 }
 
 interface ILpStaking {
-    function poolInfo(address _pool) external view returns (uint256, uint256, uint256);
+    function poolInfo(address _pool) external view returns (uint256, uint256, uint256, uint256);
     function addPool(address _token) external returns (bool);
 }
 
@@ -346,7 +346,7 @@ contract IncentiveVoting is Ownable {
 
     function setTokenApproval(address _token, bool _isApproved) external onlyOwner {
         if (!isApproved[_token]) {
-            (,uint256 lastRewardTime,) = lpStaking.poolInfo(_token);
+            (,,uint256 lastRewardTime,) = lpStaking.poolInfo(_token);
             require(lastRewardTime != 0, "Token must be voted in");
         }
         isApproved[_token] = _isApproved;
