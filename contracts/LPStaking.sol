@@ -37,6 +37,7 @@ contract EllipsisLpStaking {
         uint256 depositAmount;  // The amount of tokens deposited into the contract.
         uint256 adjustedAmount; // The user's effective balance after boosting, used to calculate emission rates.
         uint256 rewardDebt;
+        uint256 claimable;
     }
     // Info of each pool.
     struct PoolInfo {
@@ -55,8 +56,6 @@ contract EllipsisLpStaking {
 
     // token => user => Info of each user that stakes LP tokens.
     mapping(address => mapping(address => UserInfo)) public userInfo;
-    // user => base claimable balance
-    mapping(address => uint256) public userBaseClaimable;
     // The timestamp when reward mining starts.
     uint256 public immutable startTime;
 
@@ -151,9 +150,6 @@ contract EllipsisLpStaking {
 
     /**
         @notice Get the current number of unclaimed rewards for a user on one or more tokens
-        @dev The Returned values are only for rewards earned after the last interaction with
-             this contract. When a user deposits or withdraws, pending rewards for that token
-             are added to `userBaseClaimable(_user)`.
         @param _user User to query pending rewards for
         @param _tokens Array of token addresses to query
         @return uint256[] Unclaimed rewards
@@ -169,8 +165,8 @@ contract EllipsisLpStaking {
             PoolInfo storage pool = poolInfo[token];
             UserInfo storage user = userInfo[token][_user];
             (uint256 accRewardPerShare,) = _getRewardData(token);
-            accRewardPerShare = accRewardPerShare + pool.accRewardPerShare;
-            claimable[i] = user.depositAmount * accRewardPerShare / 1e12 - user.rewardDebt;
+            accRewardPerShare += pool.accRewardPerShare;
+            claimable[i] = user.claimable + user.depositAmount * accRewardPerShare / 1e12 - user.rewardDebt;
         }
         return claimable;
     }
@@ -263,7 +259,7 @@ contract EllipsisLpStaking {
         if (user.adjustedAmount > 0) {
             uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
             if (pending > 0) {
-                userBaseClaimable[_receiver] += pending;
+                user.claimable += pending;
             }
         }
         IERC20(_token).safeTransferFrom(
@@ -295,7 +291,7 @@ contract EllipsisLpStaking {
 
         uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
         if (pending > 0) {
-            userBaseClaimable[msg.sender] = userBaseClaimable[msg.sender] + pending;
+            user.claimable += pending;
         }
         depositAmount -= _amount;
         user.depositAmount = depositAmount;
@@ -325,8 +321,7 @@ contract EllipsisLpStaking {
         @dev Also updates the claimer's boost.
         @param _user Address to claim rewards for. Reverts if the caller is not the
                      claimer and the claimer has blocked third-party actions.
-        @param _tokens Array of LP token addresses to claim for. Rewards in `userBaseClaimable`
-                       are always claimed, even if this array is left empty.
+        @param _tokens Array of LP token addresses to claim for.
      */
     function claim(address _user, address[] calldata _tokens) external {
         if (msg.sender != _user) {
@@ -334,14 +329,14 @@ contract EllipsisLpStaking {
         }
 
         // calculate claimable amount
-        uint256 pending = userBaseClaimable[_user];
-        userBaseClaimable[_user] = 0;
+        uint256 pending;
         for (uint i = 0; i < _tokens.length; i++) {
             address token = _tokens[i];
             uint256 accRewardPerShare = _updatePool(token);
             UserInfo storage user = userInfo[token][_user];
             uint256 rewardDebt = user.adjustedAmount * accRewardPerShare / 1e12;
-            pending += rewardDebt - user.rewardDebt;
+            pending += user.claimable + rewardDebt - user.rewardDebt;
+            user.claimable = 0;
             _updateLiquidityLimits(_user, token, user.depositAmount, accRewardPerShare);
 
             // claim admin fees for each pool once per day
@@ -382,7 +377,7 @@ contract EllipsisLpStaking {
             if (user.adjustedAmount > 0) {
                 uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
                 if (pending > 0) {
-                    userBaseClaimable[_user] += pending;
+                    user.claimable += pending;
                 }
             }
             _updateLiquidityLimits(_user, token, user.depositAmount, accRewardPerShare);
