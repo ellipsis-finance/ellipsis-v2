@@ -36,6 +36,9 @@ contract TokenLocker {
     // related to the exit stream.
     mapping(address => StreamData) public exitStream;
 
+    // when set to true, other accounts cannot call `lock` on behalf of an account
+    mapping(address => bool) public blockThirdPartyActions;
+
     IERC20 public immutable stakingToken;
     uint256 public immutable startTime;
 
@@ -75,6 +78,14 @@ contract TokenLocker {
         // must start on the epoch week
         require((_startTime / WEEK) * WEEK == _startTime, "!epoch week");
         startTime = _startTime;
+    }
+
+    /**
+        @notice Allow or block third-party calls to deposit, withdraw
+                or claim rewards on behalf of the caller
+     */
+    function setBlockThirdPartyActions(bool _block) external {
+        blockThirdPartyActions[msg.sender] = _block;
     }
 
     function getWeek() public view returns (uint256) {
@@ -178,6 +189,9 @@ contract TokenLocker {
         uint256 _amount,
         uint256 _weeks
     ) external returns (bool) {
+        if (msg.sender != _user) {
+            require(!blockThirdPartyActions[_user], "Cannot lock on behalf of this account");
+        }
         require(_weeks > 0, "Min 1 week");
         require(_weeks <= MAX_LOCK_WEEKS, "Exceeds MAX_LOCK_WEEKS");
         require(_amount > 0, "Amount must be nonzero");
