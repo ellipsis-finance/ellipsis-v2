@@ -94,6 +94,12 @@ contract EllipsisLpStaking {
         address indexed user,
         uint256 amount
     );
+    event ClaimedReward(
+        address indexed caller,
+        address indexed claimer,
+        address indexed receiver,
+        uint256 amount
+    );
     event FeeClaimSuccess(address pool);
     event FeeClaimRevert(address pool);
 
@@ -248,8 +254,10 @@ contract EllipsisLpStaking {
         @param _token LP token address to deposit.
         @param _amount Amount of tokens to deposit. Tokens are transferred from the caller.
                        Reverts if the amount is zero or the amount exceeds the caller's balance.
+        @param _claimRewards If true, also claim pending rewards for `_receiver` that were earned
+                             on the deposited token.
      */
-    function deposit(address _receiver, address _token, uint256 _amount) external {
+    function deposit(address _receiver, address _token, uint256 _amount, bool _claimRewards) external {
         require(_amount > 0, "Cannot deposit zero");
         if (msg.sender != _receiver) {
             require(!blockThirdPartyActions[_receiver], "Cannot deposit on behalf of this account");
@@ -258,7 +266,11 @@ contract EllipsisLpStaking {
         UserInfo storage user = userInfo[_token][_receiver];
         if (user.adjustedAmount > 0) {
             uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
-            if (pending > 0) {
+            if (_claimRewards) {
+                pending += user.claimable;
+                user.claimable = 0;
+                _mintRewards(_receiver, pending + user.claimable);
+            } else if (pending > 0) {
                 user.claimable += pending;
             }
         }
@@ -281,8 +293,11 @@ contract EllipsisLpStaking {
         @param _amount Amount of tokens to withdraw. Tokens are taken from the deposited
                        balance of the caller. Reverts if the amount is zero or the amount
                        exceeds the caller's deposited balance.
+        @param _claimRewards If true, also claim pending rewards that the caller has earned
+                             on the deposited token. Rewards are sent to the caller or designated
+                             claim receiver, not to `_receiver`.
      */
-    function withdraw(address _receiver, address _token, uint256 _amount) external {
+    function withdraw(address _receiver, address _token, uint256 _amount, bool _claimRewards) external {
         require(_amount > 0, "Cannot withdraw zero");
         uint256 accRewardPerShare = _updatePool(_token);
         UserInfo storage user = userInfo[_token][msg.sender];
@@ -290,9 +305,14 @@ contract EllipsisLpStaking {
         require(depositAmount >= _amount, "withdraw: not good");
 
         uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
-        if (pending > 0) {
+        if (_claimRewards) {
+            pending += user.claimable;
+            user.claimable = 0;
+            _mintRewards(msg.sender, pending + user.claimable);
+        } else if (pending > 0) {
             user.claimable += pending;
         }
+
         depositAmount -= _amount;
         user.depositAmount = depositAmount;
         _updateLiquidityLimits(msg.sender, _token, depositAmount, accRewardPerShare);
@@ -350,17 +370,20 @@ contract EllipsisLpStaking {
                 lastFeeClaim[token] = block.timestamp;
             }
         }
+        _mintRewards(_user, pending);
+    }
 
-        // mint the claimable tokens for the user
+    function _mintRewards(address _user, uint256 _amount) internal {
         uint256 minted = mintedTokens;
-        if (minted + pending > maxMintableTokens) {
-            pending = maxMintableTokens - minted;
+        if (minted + _amount > maxMintableTokens) {
+            _amount = maxMintableTokens - minted;
         }
-        if (pending > 0) {
-            mintedTokens = minted + pending;
+        if (_amount > 0) {
+            mintedTokens = minted + _amount;
             address receiver = claimReceiver[_user];
             if (receiver == address(0)) receiver = _user;
-            rewardToken.mint(receiver, pending);
+            rewardToken.mint(receiver, _amount);
+            emit ClaimedReward(msg.sender, _user, receiver, _amount);
         }
     }
 
