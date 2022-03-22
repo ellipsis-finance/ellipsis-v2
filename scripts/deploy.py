@@ -8,7 +8,7 @@ START_TIME = 1649894400  # 00:00:00 Thursday, April 14, 2022
 MIGRATION_RATIO = 88  # 88 EPS2 for 1 EPS
 MAX_SUPPLY = 1_500_000_000 * 10 ** 18 * MIGRATION_RATIO  # increases the total supply by 50%
 MAX_MINTABLE = MAX_SUPPLY // 2  # if we migrate at exactly one year
-INITIAL_REWARDS_PER_SECOND = 2893518518518518518  # 7.5 million tokens over 30 days
+INITIAL_REWARDS_PER_SECOND = 2893518518518518518 * MIGRATION_RATIO  # 7.5 million tokens over 30 days
 
 MAX_LOCK_WEEKS = 52
 QUORUM_PCT = 30
