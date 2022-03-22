@@ -256,22 +256,30 @@ contract EllipsisLpStaking {
                        Reverts if the amount is zero or the amount exceeds the caller's balance.
         @param _claimRewards If true, also claim pending rewards for `_receiver` that were earned
                              on the deposited token.
+        @return uint256 Claimed reward amount
      */
-    function deposit(address _receiver, address _token, uint256 _amount, bool _claimRewards) external {
+    function deposit(
+        address _receiver,
+        address _token,
+        uint256 _amount,
+        bool _claimRewards
+    ) external returns (uint256) {
         require(_amount > 0, "Cannot deposit zero");
         if (msg.sender != _receiver) {
             require(!blockThirdPartyActions[_receiver], "Cannot deposit on behalf of this account");
         }
         uint256 accRewardPerShare = _updatePool(_token);
         UserInfo storage user = userInfo[_token][_receiver];
+        uint256 pending;
         if (user.adjustedAmount > 0) {
-            uint256 pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
+            pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
             if (_claimRewards) {
                 pending += user.claimable;
                 user.claimable = 0;
-                _mintRewards(_receiver, pending + user.claimable);
+                pending = _mintRewards(_receiver, pending + user.claimable);
             } else if (pending > 0) {
                 user.claimable += pending;
+                pending = 0;
             }
         }
         IERC20(_token).safeTransferFrom(
@@ -283,6 +291,7 @@ contract EllipsisLpStaking {
         user.depositAmount = depositAmount;
         _updateLiquidityLimits(_receiver, _token, depositAmount, accRewardPerShare);
         emit Deposit(msg.sender, _receiver, _token, _amount);
+        return pending;
     }
 
     /**
@@ -296,8 +305,14 @@ contract EllipsisLpStaking {
         @param _claimRewards If true, also claim pending rewards that the caller has earned
                              on the deposited token. Rewards are sent to the caller or designated
                              claim receiver, not to `_receiver`.
+        @return uint256 Claimed reward amount
      */
-    function withdraw(address _receiver, address _token, uint256 _amount, bool _claimRewards) external {
+    function withdraw(
+        address _receiver,
+        address _token,
+        uint256 _amount,
+        bool _claimRewards
+    ) external returns (uint256) {
         require(_amount > 0, "Cannot withdraw zero");
         uint256 accRewardPerShare = _updatePool(_token);
         UserInfo storage user = userInfo[_token][msg.sender];
@@ -308,9 +323,10 @@ contract EllipsisLpStaking {
         if (_claimRewards) {
             pending += user.claimable;
             user.claimable = 0;
-            _mintRewards(msg.sender, pending + user.claimable);
+            pending = _mintRewards(msg.sender, pending + user.claimable);
         } else if (pending > 0) {
             user.claimable += pending;
+            pending = 0;
         }
 
         depositAmount -= _amount;
@@ -318,6 +334,7 @@ contract EllipsisLpStaking {
         _updateLiquidityLimits(msg.sender, _token, depositAmount, accRewardPerShare);
         IERC20(_token).safeTransfer(_receiver, _amount);
         emit Withdraw(msg.sender, _receiver, _token, _amount);
+        return pending;
     }
 
     /**
@@ -342,8 +359,9 @@ contract EllipsisLpStaking {
         @param _user Address to claim rewards for. Reverts if the caller is not the
                      claimer and the claimer has blocked third-party actions.
         @param _tokens Array of LP token addresses to claim for.
+        @return uint256 Claimed reward amount
      */
-    function claim(address _user, address[] calldata _tokens) external {
+    function claim(address _user, address[] calldata _tokens) external returns (uint256) {
         if (msg.sender != _user) {
             require(!blockThirdPartyActions[_user], "Cannot claim on behalf of this account");
         }
@@ -370,10 +388,10 @@ contract EllipsisLpStaking {
                 lastFeeClaim[token] = block.timestamp;
             }
         }
-        _mintRewards(_user, pending);
+        return _mintRewards(_user, pending);
     }
 
-    function _mintRewards(address _user, uint256 _amount) internal {
+    function _mintRewards(address _user, uint256 _amount) internal returns (uint256) {
         uint256 minted = mintedTokens;
         if (minted + _amount > maxMintableTokens) {
             _amount = maxMintableTokens - minted;
@@ -385,6 +403,7 @@ contract EllipsisLpStaking {
             rewardToken.mint(receiver, _amount);
             emit ClaimedReward(msg.sender, _user, receiver, _amount);
         }
+        return _amount;
     }
 
     /**
