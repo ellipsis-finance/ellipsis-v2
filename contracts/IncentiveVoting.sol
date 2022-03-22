@@ -52,9 +52,6 @@ contract IncentiveVoting is Ownable {
     // week -> total votes used
     mapping(uint256 => uint256) public totalVotes;
 
-    // token -> last week rewards were distributed
-    mapping(address => uint256) public lastRewardedWeek;
-
     // data about token approval votes
     TokenApprovalVote[] public tokenApprovalVotes;
 
