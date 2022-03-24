@@ -172,7 +172,7 @@ contract EllipsisLpStaking {
             UserInfo storage user = userInfo[token][_user];
             (uint256 accRewardPerShare,) = _getRewardData(token);
             accRewardPerShare += pool.accRewardPerShare;
-            claimable[i] = user.claimable + user.depositAmount * accRewardPerShare / 1e12 - user.rewardDebt;
+            claimable[i] = user.claimable + user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
         }
         return claimable;
     }
