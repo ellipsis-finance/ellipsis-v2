@@ -112,6 +112,7 @@ contract EllipsisToken2 is IERC20 {
 
     function migrate(uint256 _amount) external returns (bool) {
         oldToken.transferFrom(msg.sender, address(0), _amount);
+        totalMigrated += _amount;
         uint256 newAmount = _amount * migrationRatio;
         balanceOf[msg.sender] += newAmount;
         emit Transfer(address(0), msg.sender, newAmount);
