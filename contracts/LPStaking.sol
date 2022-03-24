@@ -346,6 +346,7 @@ contract EllipsisLpStaking {
      */
     function emergencyWithdraw(address _token) external {
         UserInfo storage user = userInfo[_token][msg.sender];
+        poolInfo[_token].adjustedSupply -= user.adjustedAmount;
 
         uint256 amount = user.depositAmount;
         delete userInfo[_token][msg.sender];
