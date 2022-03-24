@@ -276,7 +276,7 @@ contract EllipsisLpStaking {
             if (_claimRewards) {
                 pending += user.claimable;
                 user.claimable = 0;
-                pending = _mintRewards(_receiver, pending + user.claimable);
+                pending = _mintRewards(_receiver, pending);
             } else if (pending > 0) {
                 user.claimable += pending;
                 pending = 0;
@@ -323,7 +323,7 @@ contract EllipsisLpStaking {
         if (_claimRewards) {
             pending += user.claimable;
             user.claimable = 0;
-            pending = _mintRewards(msg.sender, pending + user.claimable);
+            pending = _mintRewards(msg.sender, pending);
         } else if (pending > 0) {
             user.claimable += pending;
             pending = 0;
