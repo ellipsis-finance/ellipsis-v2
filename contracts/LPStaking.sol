@@ -5,7 +5,7 @@ pragma solidity 0.8.12;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 interface IIncentiveVoting {
     function getRewardsPerSecond(address _pool, uint256 _week) external view returns (uint256);
@@ -29,7 +29,7 @@ interface IStableSwap {
 
 // based on the Sushi MasterChef
 // https://github.com/sushiswap/sushiswap/blob/master/contracts/MasterChef.sol
-contract EllipsisLpStaking {
+contract EllipsisLpStaking is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // Info of each user.
@@ -263,7 +263,7 @@ contract EllipsisLpStaking {
         address _token,
         uint256 _amount,
         bool _claimRewards
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         require(_amount > 0, "Cannot deposit zero");
         if (msg.sender != _receiver) {
             require(!blockThirdPartyActions[_receiver], "Cannot deposit on behalf of this account");
@@ -312,7 +312,7 @@ contract EllipsisLpStaking {
         address _token,
         uint256 _amount,
         bool _claimRewards
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         require(_amount > 0, "Cannot withdraw zero");
         uint256 accRewardPerShare = _updatePool(_token);
         UserInfo storage user = userInfo[_token][msg.sender];
@@ -344,7 +344,7 @@ contract EllipsisLpStaking {
              the reward math that prevents a normal withdrawal.
         @param _token LP token address to withdraw.
      */
-    function emergencyWithdraw(address _token) external {
+    function emergencyWithdraw(address _token) external nonReentrant {
         UserInfo storage user = userInfo[_token][msg.sender];
         poolInfo[_token].adjustedSupply -= user.adjustedAmount;
 
