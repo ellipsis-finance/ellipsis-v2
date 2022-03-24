@@ -78,14 +78,12 @@ contract EllipsisLpStaking is ReentrancyGuard {
     ITokenLocker public immutable tokenLocker;
 
     event Deposit(
-        address indexed caller,
-        address indexed receiver,
+        address indexed user,
         address indexed token,
         uint256 amount
     );
     event Withdraw(
-        address indexed caller,
-        address indexed receiver,
+        address indexed user,
         address indexed token,
         uint256 amount
     );
@@ -249,34 +247,26 @@ contract EllipsisLpStaking is ReentrancyGuard {
     /**
         @notice Deposit LP tokens into the contract
         @dev Also updates the receiver's current boost
-        @param _receiver Address to deposit for. Reverts if the caller is not the
-                         receiver and the receiver has blocked third-party actions.
         @param _token LP token address to deposit.
-        @param _amount Amount of tokens to deposit. Tokens are transferred from the caller.
-                       Reverts if the amount is zero or the amount exceeds the caller's balance.
-        @param _claimRewards If true, also claim pending rewards for `_receiver` that were earned
-                             on the deposited token.
+        @param _amount Amount of tokens to deposit.
+        @param _claimRewards If true, also claim rewards earned on the token.
         @return uint256 Claimed reward amount
      */
     function deposit(
-        address _receiver,
         address _token,
         uint256 _amount,
         bool _claimRewards
     ) external nonReentrant returns (uint256) {
         require(_amount > 0, "Cannot deposit zero");
-        if (msg.sender != _receiver) {
-            require(!blockThirdPartyActions[_receiver], "Cannot deposit on behalf of this account");
-        }
         uint256 accRewardPerShare = _updatePool(_token);
-        UserInfo storage user = userInfo[_token][_receiver];
+        UserInfo storage user = userInfo[_token][msg.sender];
         uint256 pending;
         if (user.adjustedAmount > 0) {
             pending = user.adjustedAmount * accRewardPerShare / 1e12 - user.rewardDebt;
             if (_claimRewards) {
                 pending += user.claimable;
                 user.claimable = 0;
-                pending = _mintRewards(_receiver, pending);
+                pending = _mintRewards(msg.sender, pending);
             } else if (pending > 0) {
                 user.claimable += pending;
                 pending = 0;
@@ -289,26 +279,20 @@ contract EllipsisLpStaking is ReentrancyGuard {
         );
         uint256 depositAmount = user.depositAmount + _amount;
         user.depositAmount = depositAmount;
-        _updateLiquidityLimits(_receiver, _token, depositAmount, accRewardPerShare);
-        emit Deposit(msg.sender, _receiver, _token, _amount);
+        _updateLiquidityLimits(msg.sender, _token, depositAmount, accRewardPerShare);
+        emit Deposit(msg.sender, _token, _amount);
         return pending;
     }
 
     /**
         @notice Withdraw LP tokens from the contract
         @dev Also updates the caller's current boost
-        @param _receiver Address to send the withdrawn tokens to.
         @param _token LP token address to withdraw.
-        @param _amount Amount of tokens to withdraw. Tokens are taken from the deposited
-                       balance of the caller. Reverts if the amount is zero or the amount
-                       exceeds the caller's deposited balance.
-        @param _claimRewards If true, also claim pending rewards that the caller has earned
-                             on the deposited token. Rewards are sent to the caller or designated
-                             claim receiver, not to `_receiver`.
+        @param _amount Amount of tokens to withdraw.
+        @param _claimRewards If true, also claim rewards earned on the token.
         @return uint256 Claimed reward amount
      */
     function withdraw(
-        address _receiver,
         address _token,
         uint256 _amount,
         bool _claimRewards
@@ -332,8 +316,8 @@ contract EllipsisLpStaking is ReentrancyGuard {
         depositAmount -= _amount;
         user.depositAmount = depositAmount;
         _updateLiquidityLimits(msg.sender, _token, depositAmount, accRewardPerShare);
-        IERC20(_token).safeTransfer(_receiver, _amount);
-        emit Withdraw(msg.sender, _receiver, _token, _amount);
+        IERC20(_token).safeTransfer(msg.sender, _amount);
+        emit Withdraw(msg.sender, _token, _amount);
         return pending;
     }
 
