@@ -60,6 +60,8 @@ contract IncentiveVoting is Ownable {
 
     // minimum support required in an approval vote, as a % out of 100
     uint256 public tokenApprovalQuorumPct;
+    uint256 public pendingTokenApprovalQuorumPct;
+    uint256 public pendingTokenApprovalQuorumTime;
 
     // user -> timestamp of last created token approval vote
     mapping(address => uint256) public lastVote;
@@ -103,10 +105,16 @@ contract IncentiveVoting is Ownable {
         uint256 totalUserVotes
     );
 
+    event PendingApprovalQuorumSet(
+        address caller,
+        uint256 quorumPct,
+        uint256 pendingQuorumPct
+    );
+
     event ApprovalQuorumSet(
         address caller,
-        uint256 oldQuorumPct,
-        uint256 newQuorumPct
+        uint256 previousQuorumPct,
+        uint256 quorumPct
     );
 
     constructor(
@@ -336,22 +344,38 @@ contract IncentiveVoting is Ownable {
     }
 
     /**
-        @dev Modify the required quorum for token approval votes.
-        Hopefully this is never needed.
+        @notice Commit a change to the required quorum for token approval votes.
+        @dev Quorum can only be modified within a defined range of 10-50%. A three day
+             delay is required between commiting and applying the change, in order to
+             discourge malicious actions from the contract owner.
      */
-    function setTokenApprovalQuorum(uint256 _quorumPct) external onlyOwner {
-        emit ApprovalQuorumSet(msg.sender, tokenApprovalQuorumPct, _quorumPct);
-        tokenApprovalQuorumPct = _quorumPct;
+    function commitTokenApprovalQuorum(uint256 _quorumPct) external onlyOwner {
+        require(_quorumPct >= 10 && _quorumPct <= 50, "Invalid parameter");
+        pendingTokenApprovalQuorumPct = _quorumPct;
+        pendingTokenApprovalQuorumTime = block.timestamp + 86400 * 3;
+        emit PendingApprovalQuorumSet(msg.sender, tokenApprovalQuorumPct, _quorumPct);
     }
 
+    /**
+        @notice Apply a change to the required quorum for token approval votes
+     */
+    function applyTokenApprovalQuorum() external {
+        uint256 quorum = pendingTokenApprovalQuorumPct;
+        require(quorum > 0, "No pending value set");
+        require(pendingTokenApprovalQuorumTime < block.timestamp, "Delay has not passed");
+        pendingTokenApprovalQuorumPct = 0;
+        pendingTokenApprovalQuorumTime = 0;
+
+        emit ApprovalQuorumSet(msg.sender, tokenApprovalQuorumPct, quorum);
+        tokenApprovalQuorumPct = quorum;
+    }
 
     /**
-        @dev Modify the approval for a token to receive incentives.
-        This can only be called on tokens that were already voted in, it cannot
+        @notice Modify the approval for a token to receive incentives.
+        @dev This can only be called on tokens that were already voted in, it cannot
         be used to bypass the voting process. It is intended to block emissions in
         case of an exploit or act of maliciousness from a token within an approved pool.
      */
-
     function setTokenApproval(address _token, bool _isApproved) external onlyOwner {
         if (!isApproved[_token]) {
             (,,uint256 lastRewardTime,) = lpStaking.poolInfo(_token);
