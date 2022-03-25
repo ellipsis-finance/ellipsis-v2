@@ -28,6 +28,10 @@ contract EllipsisToken2 is IERC20 {
         uint256 oldAmount,
         uint256 newAmount
     );
+    event MintersSet(
+        address indexed caller,
+        address[] minters
+    );
 
     constructor(
         uint256 _startTime,
@@ -42,12 +46,16 @@ contract EllipsisToken2 is IERC20 {
         emit Transfer(address(0), msg.sender, 0);
     }
 
+    /**
+        @dev Minter rights must be given to `EllipsisLpStaking` and `MerkleDistributor`
+     */
     function setMinters(address[] calldata _minters) external {
         require(!isMinterSet);
         isMinterSet = true;
         for (uint256 i = 0; i < _minters.length; i++) {
             minters[_minters[i]] = true;
         }
+        emit MintersSet(msg.sender, _minters);
     }
 
     function approve(address _spender, uint256 _value) external override returns (bool) {
