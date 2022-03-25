@@ -79,6 +79,9 @@ contract IncentiveVoting is Ownable {
     // Each week a new value is pushed onto the array.
     uint256[] public rewardsPerSecond;
 
+    // Minimum weight to create a new token approval vote
+    uint256 public immutable NEW_TOKEN_APPROVAL_VOTE_MIN_WEIGHT;
+
     event TokenApprovalVoteCreated(
         address indexed creator,
         address indexed token,
@@ -120,9 +123,13 @@ contract IncentiveVoting is Ownable {
     constructor(
         ITokenLocker _tokenLocker,
         uint256 _initialRewardsPerSecond,
-        uint256 _quorumPct
+        uint256 _quorumPct,
+        uint256 _tokenApprovalMinWeight
     ) {
+        require(_tokenApprovalMinWeight > 1e18, "Incorrect precision!");
+
         tokenApprovalQuorumPct = _quorumPct;
+        NEW_TOKEN_APPROVAL_VOTE_MIN_WEIGHT = _tokenApprovalMinWeight;
         tokenLocker = _tokenLocker;
         startTime = _tokenLocker.startTime();
 
@@ -261,12 +268,9 @@ contract IncentiveVoting is Ownable {
 
         week -= 2;
         uint256 weight = tokenLocker.weeklyWeightOf(msg.sender, week);
-        // minimum weight of 50,000 and max one vote per week to prevent spamming votes
-        require(weight >= 50000 * 10**18, "Not enough weight");
-        require(
-            lastVote[msg.sender] + WEEK <= block.timestamp,
-            "One new vote per week"
-        );
+        // minimum weight and max one vote per week to prevent spamming votes
+        require(weight >= NEW_TOKEN_APPROVAL_VOTE_MIN_WEIGHT, "Not enough weight");
+        require(lastVote[msg.sender] + WEEK <= block.timestamp, "One new vote per week");
         lastVote[msg.sender] = block.timestamp;
 
         uint256 required = tokenLocker.weeklyTotalWeight(week) * tokenApprovalQuorumPct / 100 / 1e18;

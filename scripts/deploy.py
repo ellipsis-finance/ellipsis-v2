@@ -12,6 +12,8 @@ INITIAL_REWARDS_PER_SECOND = 2893518518518518518 * MIGRATION_RATIO  # 7.5 millio
 
 MAX_LOCK_WEEKS = 52
 QUORUM_PCT = 30
+#  at 20 cents per token (pre-migration) it takes ~$11k of locked for 52 weeks to make a vote
+TOKEN_APPROVAL_WEIGHT = 250_000_000 * 10 ** 18
 
 # list of initial pools that get EPS incentives immediately in the new system.
 # important to consider that all non-factory pools that we handle this way will
@@ -39,7 +41,7 @@ def main():
     # deploy the new contracts
     token = EllipsisToken2.deploy(START_TIME, MAX_SUPPLY, epsv1, MIGRATION_RATIO, {"from": acct})
     locker = TokenLocker.deploy(token, START_TIME, MAX_LOCK_WEEKS, {'from': acct})
-    voter = IncentiveVoting.deploy(locker, INITIAL_REWARDS_PER_SECOND, QUORUM_PCT, {'from': acct})
+    voter = IncentiveVoting.deploy(locker, INITIAL_REWARDS_PER_SECOND, QUORUM_PCT, TOKEN_APPROVAL_WEIGHT, {'from': acct})
     fee_distro = FeeDistributor.deploy(locker, {'from': acct})
     staking = EllipsisLpStaking.deploy(token, voter, locker, MAX_MINTABLE, {'from': acct})
 
