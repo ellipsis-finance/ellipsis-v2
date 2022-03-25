@@ -5,9 +5,6 @@ from brownie import accounts, chain
 
 @pytest.fixture(scope="module", autouse=True)
 def setup(eps2, locker, voter, lp_tokens, lp_staker, alice, bob, start_time, pools):
-    # finish some contract setup
-    voter.setLpStaking(lp_staker, {'from': alice})
-
     # hand out some eps
     for acct in [alice, bob]:
         eps2.mint(acct, 1500000 * 10 ** 18, {'from': alice})
@@ -38,30 +35,30 @@ def setup(eps2, locker, voter, lp_tokens, lp_staker, alice, bob, start_time, poo
         assert voter.isApproved(lp_tokens[index]) == True
 
     # deposit LP
-    lp_staker.deposit(alice, lp_tokens[0], amount, {"from": alice})
+    lp_staker.deposit(lp_tokens[0], amount, 1, {"from": alice})
 
 
 def test_withdraw_unk_lp_tokens(lp_staker, pools, alice):
     with brownie.reverts(""):
-        lp_staker.withdraw(alice, pools[0], 10 ** 19, {"from": alice})
+        lp_staker.withdraw(pools[0], 10 ** 19, 1, {"from": alice})
 
 
 def test_withdraw_zero(lp_staker, lp_tokens, charlie):
     with brownie.reverts("Cannot withdraw zero"):
-        lp_staker.withdraw(charlie, lp_tokens[0], 0, {"from": charlie})
+        lp_staker.withdraw(lp_tokens[0], 0, 1, {"from": charlie})
 
 
 def test_withdraw_insufficient_deposit(lp_staker, alice, lp_tokens):
     user_bal = lp_staker.userInfo(lp_tokens[0], alice);
     assert user_bal[0] == 10 ** 19
     with brownie.reverts("withdraw: not good"):
-        lp_staker.withdraw(alice, lp_tokens[0], 10 ** 19 + 1, {"from": alice})
+        lp_staker.withdraw(lp_tokens[0], 10 ** 19 + 1, 1, {"from": alice})
 
 
 def test_withdraw(lp_staker, alice, lp_tokens):
     initial = lp_tokens[0].balanceOf(alice)
     # Alice makes a withdrawal
-    lp_staker.withdraw(alice, lp_tokens[0], 10 ** 19, {"from": alice})
+    lp_staker.withdraw(lp_tokens[0], 10 ** 19, 1, {"from": alice})
     pool_info = lp_staker.poolInfo(lp_tokens[0])
     user_bal1 = lp_staker.userInfo(lp_tokens[0], alice);
 
@@ -78,7 +75,7 @@ def test_withdraw_partial(lp_staker, alice, lp_tokens):
     pool_info0 = lp_tokens[0].balanceOf(lp_staker)
 
     # Alice makes a withdrawal she had 10**19, so should have 6 * 10**18 left staked
-    lp_staker.withdraw(alice, lp_tokens[0], 4 * 10**18, {"from": alice})
+    lp_staker.withdraw(lp_tokens[0], 4 * 10**18, 1, {"from": alice})
     pool_info1 = lp_tokens[0].balanceOf(lp_staker)
     user_bal1 = lp_staker.userInfo(lp_tokens[0], alice);
     assert lp_tokens[0].balanceOf(alice) == alice_bal0 + 4 * 10**18
@@ -94,7 +91,7 @@ def test_multi_accounts_deposit_withdraw(lp_staker, lp_tokens):
     for acct in accounts[:10]:  
         lp_tokens[1].mint(acct, amount)
         lp_tokens[1].approve(lp_staker, amount, {"from": acct})
-        lp_staker.deposit(acct, lp_tokens[1], amount, {"from": acct})
+        lp_staker.deposit(lp_tokens[1], amount, 1, {"from": acct})
         user_bal = lp_staker.userInfo(lp_tokens[1], acct);
         total_bal += user_bal[0]
    
@@ -104,7 +101,7 @@ def test_multi_accounts_deposit_withdraw(lp_staker, lp_tokens):
     for acct in accounts[:10]:
         user_bal = lp_staker.userInfo(lp_tokens[1], acct);
         assert user_bal[0] == amount
-        lp_staker.withdraw(acct, lp_tokens[1], amount // 2, {"from": acct})
+        lp_staker.withdraw(lp_tokens[1], amount // 2, 1, {"from": acct})
         user_bal = lp_staker.userInfo(lp_tokens[1], acct);
         total_bal += user_bal[0]
 
@@ -117,8 +114,7 @@ def test_multi_accounts_deposit_withdraw(lp_staker, lp_tokens):
 
 def test_withdraw_event(lp_staker, alice, lp_tokens):
     amount = 10 ** 19
-    tx = lp_staker.withdraw(alice, lp_tokens[0], amount, {"from": alice})
-    assert tx.events["Withdraw"]["caller"] == alice
-    assert tx.events["Withdraw"]["receiver"] == alice
+    tx = lp_staker.withdraw(lp_tokens[0], amount, 1, {"from": alice})
+    assert tx.events["Withdraw"]["user"] == alice
     assert tx.events["Withdraw"]["token"] == lp_tokens[0]
     assert tx.events["Withdraw"]["amount"] == amount

@@ -21,7 +21,6 @@ def setup_gauges(voter, lp_tokens, pools, locker, alice, bob):
 
 @pytest.fixture(scope="module", autouse=True)
 def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, start_time):
-    voter.setLpStaking(lp_staker, {'from': alice})
     lp_tokens[0].setMinter(pools[0], {'from': alice})
     lp_tokens[1].setMinter(pools[1])
 

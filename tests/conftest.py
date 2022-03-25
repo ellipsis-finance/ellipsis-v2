@@ -3,6 +3,7 @@ from brownie import ZERO_ADDRESS, accounts, chain
 from brownie_tokens import ERC20
 
 START_TIME =    1649894400  # 00:00:00 Thursday, April 14, 2022
+START_GAUGE_VOTING = START_TIME + (604800*2)
 MIGRATION_RATIO = 88  # 88 EPS2 for 1 EPS
 MAX_SUPPLY = 1_500_000_000 * 10 ** 18 * MIGRATION_RATIO  # increases the total supply by 50%
 MAX_MINTABLE = MAX_SUPPLY // 2  # if we migrate at exactly one year
@@ -35,6 +36,16 @@ def start_time():
 
 
 @pytest.fixture(scope="session")
+def start_gauge_voting():
+    return START_GAUGE_VOTING
+
+
+@pytest.fixture(scope="session")
+def migration_ratio():
+    return MIGRATION_RATIO
+
+
+@pytest.fixture(scope="session")
 def alice():
     return accounts[0]
 
@@ -60,7 +71,17 @@ def eps(alice):
 
 
 @pytest.fixture(scope="module")
+def initial_pools():
+    return INITIAL_POOLS
+
+
+@pytest.fixture(scope="module")
 def incentive1():
+    return ERC20({'from': alice})
+
+
+@pytest.fixture(scope="module")
+def incentive2():
     return ERC20({'from': alice})
 
 
@@ -115,9 +136,11 @@ def fee_distro_tester(FeeDistributorTester, alice):
 # note INITIAL_POOLS is not set up.
 @pytest.fixture(scope="module")
 def lp_staker(EllipsisLpStaking, eps2, locker, voter, alice):
-    staking = EllipsisLpStaking.deploy(eps2, voter, locker, MAX_MINTABLE, INITIAL_POOLS, {'from': alice})
+    staking = EllipsisLpStaking.deploy(eps2, voter, locker, MAX_MINTABLE, {'from': alice})
+    voter.setLpStaking(staking, INITIAL_POOLS, {"from": alice})
     eps2.setMinters([alice, staking], {"from": alice})
     return staking
+
 
 
 

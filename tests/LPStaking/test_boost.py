@@ -8,7 +8,7 @@ from brownie import ZERO_ADDRESS, accounts, chain
 
 @pytest.fixture(scope="module", autouse=True)
 def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, charlie, dan, start_time):
-    voter.setLpStaking(lp_staker, {'from': alice})
+    # voter.setLpStaking(lp_staker, {'from': alice})
     lp_tokens[0].setMinter(pools[0], {'from': alice})
     lp_tokens[1].setMinter(pools[1], {'from': alice})
 
@@ -42,7 +42,7 @@ def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, charlie,
 def test_equal_rewards(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, charlie, dan):
     # stake. then claim before any voting week to update each user's boost
     for acct in [alice, bob, charlie, dan]:
-        lp_staker.deposit(acct, lp_tokens[0], 100000 * 10 ** 18, {"from": acct})
+        lp_staker.deposit(lp_tokens[0], 100000 * 10 ** 18, 1, {"from": acct})
 
     for acct in [alice, bob, charlie, dan]:
         lp_staker.claim(acct, [lp_tokens[0]], {"from": acct})
@@ -80,8 +80,8 @@ def test_equal_rewards(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, ch
 # Alice and Dan are locked, Alice has staked EPS however Dan has not. Poor Dan. Alice
 # should have full boost and 2.5x the rewards of dan.
 def test_boost_calculation_alice_versus_dan(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, charlie, dan):
-    lp_staker.deposit(alice, lp_tokens[0], 100000 * 10 ** 18, {"from": alice})
-    lp_staker.deposit(dan, lp_tokens[0], 100000 * 10 ** 18, {"from": dan})
+    lp_staker.deposit(lp_tokens[0], 100000 * 10 ** 18, 1, {"from": alice})
+    lp_staker.deposit(lp_tokens[0], 100000 * 10 ** 18, 1, {"from": dan})
     lp_staker.claim(alice, [lp_tokens[0]], {"from": alice})
     lp_staker.claim(dan, [lp_tokens[0]], {"from": dan})
 
@@ -114,7 +114,7 @@ def test_boost_calculation_alice_versus_dan(lp_staker, lp_tokens, locker, eps2, 
 
 def test_boost_four_players(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, charlie, dan):
     for acct in [alice, bob, charlie, dan]:
-        lp_staker.deposit(acct, lp_tokens[0], 100000 * 10 ** 18, {"from": acct})
+        lp_staker.deposit(lp_tokens[0], 100000 * 10 ** 18, 1, {"from": acct})
 
     for acct in [alice, bob, charlie, dan]:
         lp_staker.claim(acct, [lp_tokens[0]], {"from": acct})

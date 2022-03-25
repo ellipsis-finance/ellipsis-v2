@@ -21,7 +21,6 @@ def setup_gauges(voter, lp_tokens, pools, locker, alice, bob):
 
 @pytest.fixture(scope="module", autouse=True)
 def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, start_time):
-    voter.setLpStaking(lp_staker, {'from': alice})
     lp_tokens[0].setMinter(pools[0], {'from': alice})
     lp_tokens[1].setMinter(pools[1], {'from': alice})
 
@@ -37,35 +36,35 @@ def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, start_ti
 # no revert string here
 def test_deposit_no_amount(lp_staker, alice, pools):
     with brownie.reverts():
-        lp_staker.deposit(alice, pools[0], 0, {"from": alice})
+        lp_staker.deposit(pools[0], 0, 1, {"from": alice})
 
 
-def test_deposit_unauthorized_depositor(lp_staker, lp_tokens, setup_gauges, alice, bob, pools):
-    amount = 10**19
-    lp_tokens[0].mint(alice, amount, {"from": alice})
-    lp_tokens[0].approve(lp_staker, amount, {"from": alice})
-    # deposit LP
-    lp_staker.deposit(bob, lp_tokens[0], amount, {"from": alice})
-    # bob blocks third party actions
-    lp_staker.setBlockThirdPartyActions(1, {"from": bob})
-    # alice tries to act on bob's behalf
-    with brownie.reverts("Cannot deposit on behalf of this account"):
-        lp_staker.deposit(bob, lp_tokens[0], amount, {"from": alice})
+# def test_deposit_unauthorized_depositor(lp_staker, lp_tokens, setup_gauges, alice, bob, pools):
+#     amount = 10**19
+#     lp_tokens[0].mint(alice, amount, {"from": alice})
+#     lp_tokens[0].approve(lp_staker, amount, {"from": alice})
+#     # deposit LP
+#     lp_staker.deposit(lp_tokens[0], amount, 1, {"from": alice})
+#     # bob blocks third party actions
+#     lp_staker.setBlockThirdPartyActions(1, {"from": bob})
+#     # alice tries to act on bob's behalf
+#     with brownie.reverts("Cannot deposit on behalf of this account"):
+#         lp_staker.deposit(lp_tokens[0], amount, 1, {"from": alice})
 
 
 def test_deposit_not_a_pools(lp_staker, alice, pools):
     with brownie.reverts():
-        lp_staker.deposit(alice, pools[0], 10 ** 19)
+        lp_staker.deposit(pools[0], 10 ** 19, 1)
 
 
 def test_deposit_insufficient_balance(lp_staker, pools, lp_tokens, alice, charlie):
     with brownie.reverts():
         # charlie has a zero balance
-        lp_staker.deposit(alice, lp_tokens[0], 10 ** 18, {"from": charlie})
+        lp_staker.deposit(lp_tokens[0], 10 ** 18, 1, {"from": charlie})
 
     with brownie.reverts():
         # alice has a balance, try to deposit too much
-        lp_staker.deposit(alice, lp_tokens[0], lp_tokens[0].balanceOf(alice) + 1, {"from": alice})
+        lp_staker.deposit(lp_tokens[0], lp_tokens[0].balanceOf(alice) + 1, 1, {"from": alice})
 
 
 def test_deposit(lp_staker, setup_gauges, lp_tokens, alice):
@@ -76,7 +75,7 @@ def test_deposit(lp_staker, setup_gauges, lp_tokens, alice):
     lp_tokens[0].mint(alice, amount, {"from": alice})
     lp_tokens[0].approve(lp_staker, amount, {"from": alice})
     # deposit LP
-    lp_staker.deposit(alice, lp_tokens[0], amount, {"from": alice})
+    lp_staker.deposit(lp_tokens[0], amount, 1, {"from": alice})
     # get pool info
     tx = lp_staker.poolInfo(lp_tokens[0])
     assert tx[0] == amount
@@ -93,7 +92,7 @@ def test_multi_deposit(lp_staker, setup_gauges, pools, lp_tokens, alice):
     for acct in accounts[:10]:
         lp_tokens[0].mint(acct, amount)
         lp_tokens[0].approve(lp_staker, amount, {"from": acct})
-        lp_staker.deposit(alice, lp_tokens[0], amount, {"from": acct})
+        lp_staker.deposit(lp_tokens[0], amount, 1, {"from": acct})
 
     lp_staker_bal1 = lp_tokens[0].balanceOf(lp_staker);
     assert lp_staker_bal1 - lp_staker_bal0 == amount * 10
@@ -103,8 +102,8 @@ def test_deposit_event(pools, setup_gauges, lp_staker, lp_tokens, alice):
     amount = 10 ** 19
     lp_tokens[0].mint(alice, amount, {"from": alice})
     lp_tokens[0].approve(lp_staker, amount, {"from": alice})
-    tx = lp_staker.deposit(alice, lp_tokens[0], amount, {"from": alice})
-    assert tx.events["Deposit"]["caller"] == alice
-    assert tx.events["Deposit"]["receiver"] == alice
+    tx = lp_staker.deposit(lp_tokens[0], amount, 1, {"from": alice})
+    # assert tx.events["Deposit"]["caller"] == alice
+    assert tx.events["Deposit"]["user"] == alice
     assert tx.events["Deposit"]["token"] == lp_tokens[0]
     assert tx.events["Deposit"]["amount"] == amount
