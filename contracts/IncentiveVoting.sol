@@ -55,8 +55,8 @@ contract IncentiveVoting is Ownable {
     // data about token approval votes
     TokenApprovalVote[] public tokenApprovalVotes;
 
-    // voteId -> token -> has voted for token approval?
-    mapping(uint256 => mapping (address =>bool)) hasVoted;
+    // voteId -> user -> supporting votes for token approval
+    mapping(uint256 => mapping(address => uint256)) public userTokenApprovalVotes;
 
     // minimum support required in an approval vote, as a % out of 100
     uint256 public tokenApprovalQuorumPct;
@@ -304,16 +304,24 @@ contract IncentiveVoting is Ownable {
              It is not possible to vote against a proposed token, users who
              wish to do so should instead abstain from voting.
         @param _voteIndex Array index referencing the vote
+        @param _yesVotes Number of votes to cast in favor. End users can set as
+                         2**256-1 to vote with all available weight. Integragors
+                         may wish to vote with only a portion of their available
+                         weight, in order to more accurately reflect a sub-vote
+                         within their userbase.
      */
-    function voteForTokenApproval(uint256 _voteIndex) external {
+    function voteForTokenApproval(uint256 _voteIndex, uint256 _yesVotes) external {
         TokenApprovalVote storage vote = tokenApprovalVotes[_voteIndex];
-        require(!hasVoted[_voteIndex][msg.sender], "Already voted");
         require(vote.startTime > block.timestamp - WEEK, "Vote has ended");
         require(!isApproved[vote.token], "Already approved");
 
-        hasVoted[_voteIndex][msg.sender] = true;
-        uint256 amount = tokenLocker.weeklyWeightOf(msg.sender, vote.week) / 1e18;
-        vote.givenVotes += amount;
+        uint256 totalVotes = tokenLocker.weeklyWeightOf(msg.sender, vote.week) / 1e18;
+        if (_yesVotes == type(uint256).max) _yesVotes = totalVotes;
+        uint256 usedVotes = userTokenApprovalVotes[_voteIndex][msg.sender] + _yesVotes;
+        require(usedVotes <= totalVotes, "Exceeds available votes");
+
+        userTokenApprovalVotes[_voteIndex][msg.sender] = usedVotes;
+        vote.givenVotes += _yesVotes;
 
         if (vote.givenVotes >= vote.requiredVotes) {
             isApproved[vote.token] = true;
@@ -324,7 +332,7 @@ contract IncentiveVoting is Ownable {
         emit VotedForTokenApproval(
             msg.sender,
             _voteIndex,
-            amount,
+            _yesVotes,
             vote.givenVotes,
             vote.requiredVotes,
             isApproved[vote.token]
