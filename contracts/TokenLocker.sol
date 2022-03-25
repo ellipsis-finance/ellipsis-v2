@@ -158,15 +158,15 @@ contract TokenLocker {
         uint256 length = 0;
         uint256 week = getWeek();
         uint256[] memory unlocks = new uint256[](MAX_LOCK_WEEKS);
-        for (uint256 i = week + 1; i < week + MAX_LOCK_WEEKS + 1; i++) {
-            unlocks[i] = weeklyLockData[_user][i].unlock;
+        for (uint256 i = 0; i < MAX_LOCK_WEEKS; i++) {
+            unlocks[i] = weeklyLockData[_user][i + week + 1].unlock;
             if (unlocks[i] > 0) length++;
         }
         lockData = new uint256[2][](length);
         uint256 x = 0;
-        for (uint256 i = week + 1; i < week + MAX_LOCK_WEEKS + 1; i++) {
+        for (uint256 i = 0; i < MAX_LOCK_WEEKS; i++) {
             if (unlocks[i] > 0) {
-                lockData[x] = [i - week, unlocks[i]];
+                lockData[x] = [i + 1, unlocks[i]];
                 x++;
             }
         }
