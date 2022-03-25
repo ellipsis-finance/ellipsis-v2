@@ -266,7 +266,7 @@ contract IncentiveVoting is Ownable {
         address pool = IERC20Mintable(_token).minter();
         IStableSwap(pool).withdraw_admin_fees();
 
-        week -= 2;
+        week -= 1;
         uint256 weight = tokenLocker.weeklyWeightOf(msg.sender, week);
         // minimum weight and max one vote per week to prevent spamming votes
         require(weight >= NEW_TOKEN_APPROVAL_VOTE_MIN_WEIGHT, "Not enough weight");
