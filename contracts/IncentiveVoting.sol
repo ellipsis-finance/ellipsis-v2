@@ -296,6 +296,17 @@ contract IncentiveVoting is Ownable {
         return voteIdx;
     }
 
+    function availableTokenApprovalVotes(address _user, uint256 _voteIndex)
+        external
+        view
+        returns (uint256 _remainingVotes)
+    {
+        TokenApprovalVote storage vote = tokenApprovalVotes[_voteIndex];
+        if (vote.startTime <= block.timestamp - WEEK) return 0;
+        uint256 totalVotes = tokenLocker.weeklyWeightOf(_user, vote.week) / 1e18;
+        return totalVotes - userTokenApprovalVotes[_voteIndex][_user];
+    }
+
     /**
         @notice Vote in favor of approving a new token for protocol emissions
         @dev Votes last for one week. Weight for voting is based on the last
@@ -316,8 +327,11 @@ contract IncentiveVoting is Ownable {
         require(!isApproved[vote.token], "Already approved");
 
         uint256 totalVotes = tokenLocker.weeklyWeightOf(msg.sender, vote.week) / 1e18;
-        if (_yesVotes == type(uint256).max) _yesVotes = totalVotes;
-        uint256 usedVotes = userTokenApprovalVotes[_voteIndex][msg.sender] + _yesVotes;
+        uint256 usedVotes = userTokenApprovalVotes[_voteIndex][msg.sender];
+        if (_yesVotes == type(uint256).max) {
+            _yesVotes = totalVotes - usedVotes;
+        }
+        usedVotes += _yesVotes;
         require(usedVotes <= totalVotes, "Exceeds available votes");
 
         userTokenApprovalVotes[_voteIndex][msg.sender] = usedVotes;
