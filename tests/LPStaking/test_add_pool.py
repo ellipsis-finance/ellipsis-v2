@@ -14,7 +14,7 @@ def setup_gauges(voter, lp_tokens, pools, locker, alice, bob):
         # create a vote for a gauge
         voter.createTokenApprovalVote(lp_tokens[index], {"from": alice})
         # vote
-        voter.voteForTokenApproval(index, {"from": alice})
+        voter.voteForTokenApproval(index, 2**256-1, {"from": alice})
         # assert the token was approved
         assert voter.isApproved(lp_tokens[index]) == True
 
@@ -39,7 +39,7 @@ def test_unauthorized_add_pool(lp_staker, alice, lp_tokens):
 
 
 def test_add_pool_registered_tokens(lp_staker, locker, lp_tokens, voter, pools, alice):
-    num_pools0 = lp_staker.poolLength() 
+    num_pools0 = lp_staker.poolLength()
     locker.lock(alice, 50000 * 10 ** 18, 52, {"from": alice})
     for index in range(5):
         # bump past first week
@@ -49,10 +49,10 @@ def test_add_pool_registered_tokens(lp_staker, locker, lp_tokens, voter, pools, 
         # create a vote for a gauge
         voter.createTokenApprovalVote(lp_tokens[index], {"from": alice})
         # vote
-        voter.voteForTokenApproval(index, {"from": alice})
+        voter.voteForTokenApproval(index, 2**256-1, {"from": alice})
         # assert the token was approved
         assert voter.isApproved(lp_tokens[index]) == True
-    num_pools1 = lp_staker.poolLength() 
+    num_pools1 = lp_staker.poolLength()
     # check that we have added the tokens to registeredTokens
     assert num_pools1 - num_pools0 == 5
 
@@ -67,12 +67,10 @@ def test_add_pool_last_reward_time(lp_staker, locker, lp_tokens, voter, pools, a
         # create a vote for a gauge
         voter.createTokenApprovalVote(lp_tokens[index], {"from": alice})
         # vote
-        voter.voteForTokenApproval(index, {"from": alice})
+        voter.voteForTokenApproval(index, 2**256-1, {"from": alice})
         # assert the token was approved
         assert voter.isApproved(lp_tokens[index]) == True
 
     for index in range(5):
         pr = lp_staker.poolInfo(lp_tokens[index])
         assert pr[2] > 0
-
-

@@ -22,7 +22,7 @@ def test_create_token_approval_vote(voter, alice, lp_tokens):
     chain.mine(timedelta=86400 * 14)
     tx = voter.createTokenApprovalVote(lp_tokens[0], {"from": alice})
     assert tx.events['TokenApprovalVoteCreated']['token'] == lp_tokens[0]
-  
+
 
 def test_fails_first_week(voter, alice, lp_tokens):
     with brownie.reverts("Cannot make vote in first two weeks"):
@@ -77,8 +77,8 @@ def test_vote_same_token_twice_for_approval_vote(voter, lp_tokens, alice, bob):
     chain.mine(timedelta=86400 * 14)
     # first vote
     voter.createTokenApprovalVote(lp_tokens[0], {"from": alice})
-    voter.voteForTokenApproval(0, {"from": alice})
-    voter.voteForTokenApproval(0, {"from": bob})
+    voter.voteForTokenApproval(0, 2**256-1, {"from": alice})
+    voter.voteForTokenApproval(0, 2**256-1, {"from": bob})
 
     chain.mine(timedelta=86400 * 14)
     assert voter.isApproved(lp_tokens[0]) == True
@@ -92,7 +92,3 @@ def test_vote_for_non_lp_token(voter, alice, pools):
     chain.mine(timedelta=86400 * 14)
     with brownie.reverts():
         voter.createTokenApprovalVote(pools[0], {"from": alice})
-
-
-
-

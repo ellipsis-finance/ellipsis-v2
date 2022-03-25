@@ -11,6 +11,7 @@ INITIAL_REWARDS_PER_SECOND = 2893518518518518518  # 7.5 million tokens over 30 d
 
 MAX_LOCK_WEEKS = 52
 QUORUM_PCT = 30
+TOKEN_APPROVAL_WEIGHT = 50000 * 10**18
 
 # might need to mock these or just test on a fork
 INITIAL_POOLS = [
@@ -117,7 +118,7 @@ def locker(TokenLocker, eps2, alice):
 
 @pytest.fixture(scope="module")
 def voter(IncentiveVoting, locker, alice):
-    voter = IncentiveVoting.deploy(locker, INITIAL_REWARDS_PER_SECOND, QUORUM_PCT, {'from': alice})
+    voter = IncentiveVoting.deploy(locker, INITIAL_REWARDS_PER_SECOND, QUORUM_PCT, TOKEN_APPROVAL_WEIGHT, {'from': alice})
     return voter
 
 
@@ -140,7 +141,3 @@ def lp_staker(EllipsisLpStaking, eps2, locker, voter, alice):
     voter.setLpStaking(staking, INITIAL_POOLS, {"from": alice})
     eps2.setMinters([alice, staking], {"from": alice})
     return staking
-
-
-
-

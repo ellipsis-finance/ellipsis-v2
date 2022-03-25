@@ -15,7 +15,7 @@ def setup(eps2, locker, voter, lp_tokens, lp_staker, alice, bob, start_time, poo
     # lock some eps to have some vote weight
     locker.lock(alice, 100000 * 10 ** 18, 10, {"from": alice})
     locker.lock(bob, 200000 * 10 ** 18, 2, {"from": bob})
-    
+
     amount = 10**19
     for index in range(5):
         # mint some lp tokens.
@@ -30,7 +30,7 @@ def setup(eps2, locker, voter, lp_tokens, lp_staker, alice, bob, start_time, poo
         # create a vote for a gauge
         voter.createTokenApprovalVote(lp_tokens[index], {"from": alice})
         # vote
-        voter.voteForTokenApproval(index, {"from": alice})
+        voter.voteForTokenApproval(index, 2**256-1, {"from": alice})
         # assert the token was approved
         assert voter.isApproved(lp_tokens[index]) == True
 
@@ -79,8 +79,8 @@ def test_withdraw_partial(lp_staker, alice, lp_tokens):
     pool_info1 = lp_tokens[0].balanceOf(lp_staker)
     user_bal1 = lp_staker.userInfo(lp_tokens[0], alice);
     assert lp_tokens[0].balanceOf(alice) == alice_bal0 + 4 * 10**18
-    
-    # assert that the pool's lp balance and user's stake lp 
+
+    # assert that the pool's lp balance and user's stake lp
     # balance are equal, and equal to 10**19 - 4 * 10**18
     assert pool_info1 == user_bal1[0] == 6 * 10**18
 
@@ -88,13 +88,13 @@ def test_withdraw_partial(lp_staker, alice, lp_tokens):
 def test_multi_accounts_deposit_withdraw(lp_staker, lp_tokens):
     amount = 10 ** 19
     total_bal = 0
-    for acct in accounts[:10]:  
+    for acct in accounts[:10]:
         lp_tokens[1].mint(acct, amount)
         lp_tokens[1].approve(lp_staker, amount, {"from": acct})
         lp_staker.deposit(lp_tokens[1], amount, 1, {"from": acct})
         user_bal = lp_staker.userInfo(lp_tokens[1], acct);
         total_bal += user_bal[0]
-   
+
     assert total_bal == amount * 10
 
     total_bal = 0

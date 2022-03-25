@@ -35,7 +35,7 @@ def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, charlie,
         # create a vote for a gauge
         voter.createTokenApprovalVote(lp_tokens[index], {"from": alice})
         # vote
-        voter.voteForTokenApproval(index, {"from": alice})
+        voter.voteForTokenApproval(index, 2**256-1, {"from": alice})
         # assert the token was approved
         assert voter.isApproved(lp_tokens[index]) == True
 
@@ -46,7 +46,7 @@ def test_equal_rewards(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, ch
 
     for acct in [alice, bob, charlie, dan]:
         lp_staker.claim(acct, [lp_tokens[0]], {"from": acct})
-   
+
     # move ahead to a votable week
     chain.mine(timedelta=86400 * 7)
     # Alice votes for a gauge to get emissions
@@ -118,7 +118,6 @@ def test_boost_four_players(lp_staker, lp_tokens, locker, eps2, voter, alice, bo
 
     for acct in [alice, bob, charlie, dan]:
         lp_staker.claim(acct, [lp_tokens[0]], {"from": acct})
-   
 
     # move ahead to a votable week
     chain.mine(timedelta=86400 * 7)
@@ -163,4 +162,3 @@ def test_boost_four_players(lp_staker, lp_tokens, locker, eps2, voter, alice, bo
     assert bob_gain/dan_gain == bob_boost/dan_boost
 
     assert charlie_gain/dan_gain == charlie_boost/dan_boost
-

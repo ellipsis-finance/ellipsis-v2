@@ -20,7 +20,7 @@ def setup_gauges(voter, lp_tokens, pools, locker, alice, bob):
         # create a vote for a gauge
         voter.createTokenApprovalVote(lp_tokens[index], {"from": alice})
         # vote
-        voter.voteForTokenApproval(index, {"from": alice})
+        voter.voteForTokenApproval(index, 2**256-1, {"from": alice})
         # assert the token was approved
         assert voter.isApproved(lp_tokens[index]) == True
 
@@ -45,7 +45,7 @@ def test_available_vote_weight(voter, alice, bob):
     chain.mine(timedelta=86400 * 7)
     assert voter.availableVotes(alice) == 0
     assert voter.availableVotes(bob) == 200000
-  
+
 
 def test_locking_affects_available_immediately(voter, locker, alice):
     locker.lock(alice, 10**18, 16, {'from': alice})
@@ -54,7 +54,7 @@ def test_locking_affects_available_immediately(voter, locker, alice):
 
 # don't think we need getCurrentVotes
 # def test_vote(voter, alice, pools, setup_gauges, lp_tokens):
-#     tx = voter.voteForTokenApproval(pools[0], 1000, {'from': alice})
+#     tx = voter.voteForTokenApproval(pools[0], 1000, 2**256-1, {'from': alice})
 #     week = voter.getWeek()
 #     assert voter.userVotes(alice, week) == 1000
 #     rem = voter.poolVotes(pools[0], week)
