@@ -4,6 +4,17 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
+
+struct LockedBalance {
+    uint256 amount;
+    uint256 unlockTime;
+}
+
+interface IMultiFeeDistribution {
+    function lockedBalances(address) view external returns (uint, uint, uint, LockedBalance[] memory);
+}
+
+
 contract TokenLocker {
     using SafeERC20 for IERC20;
 
@@ -26,6 +37,11 @@ contract TokenLocker {
     // `weeklyLockData` tracks the total lock weights and unlockable token balances for each user.
     mapping(address => LockData[9362]) weeklyLockData;
 
+    // `legacyLockData` tracks lock weights in the old EPS v1 system. These weights are creditted
+    // to the user upon calling `registerLegacyLocks`. They differ from a normal locked balance
+    // because they cannot be withdrawn.
+    mapping(address => uint256[13]) public legacyLockWeight;
+
     // `withdrawnUntil` tracks the most recent week for which each user has withdrawn their
     // expired token locks. Unlock values in `weeklyLockData` with an index less than the related
     // value within `withdrawnUntil` have already been withdrawn.
@@ -39,12 +55,12 @@ contract TokenLocker {
     // when set to true, other accounts cannot call `lock` on behalf of an account
     mapping(address => bool) public blockThirdPartyActions;
 
+    IMultiFeeDistribution public immutable epsV1Staker;
     IERC20 public immutable stakingToken;
+
     uint256 public immutable startTime;
-
-    uint256 constant WEEK = 86400 * 7;
-
     uint256 public immutable MAX_LOCK_WEEKS;
+    uint256 constant WEEK = 86400 * 7;
 
     event NewLock(address indexed user, uint256 amount, uint256 lockWeeks);
     event ExtendLock(
@@ -70,11 +86,13 @@ contract TokenLocker {
      */
     constructor(
         IERC20 _stakingToken,
+        IMultiFeeDistribution _epsV1Staker,
         uint256 _startTime,
         uint256 _maxLockWeeks
     ) {
         MAX_LOCK_WEEKS = _maxLockWeeks;
         stakingToken = _stakingToken;
+        epsV1Staker = _epsV1Staker;
         // must start on the epoch week
         require((_startTime / WEEK) * WEEK == _startTime, "!epoch week");
         startTime = _startTime;
@@ -343,6 +361,42 @@ contract TokenLocker {
             }
             weeklyTotalWeight[i] += uint128(amount);
             data[i].weight += uint128(amount);
+        }
+    }
+
+    /**
+        @notice Register EPSv1 locked balances within the v2 protocol
+        @dev Each users with a v1 lock must call once to register their balance.
+             V1 locks are given a 4x boost to their weight relative to the unlock time.
+        @param _user User address to register
+     */
+    function registerLegacyLocks(address _user) external {
+        (,,,LockedBalance[] memory lockData) = epsV1Staker.lockedBalances(_user);
+        require(lockData.length > 0, "No legacy locks");
+        uint256 week = getWeek();
+        require(legacyLockWeight[_user][week] == 0, "Already registered");
+
+        uint256 remainingOffset = block.timestamp / WEEK;
+        uint256[13] memory lockWeights;
+        for(uint i = 0; i < lockData.length; i++) {
+            uint256 amount = lockData[i].amount;
+            uint256 remaining = lockData[i].unlockTime / WEEK - remainingOffset;
+            // start registering from this week - giving credit for already passed weeks
+            // will break accounting elsewhere within the system
+            uint256 index = week;
+            while (remaining > 0) {
+                lockWeights[index] += amount * remaining * 4;
+                index++;
+                remaining--;
+            }
+        }
+
+        for (uint i = 0; i < 13; i++) {
+            uint256 weight = lockWeights[i];
+            if (weight > 0) {
+                 legacyLockWeight[_user][i] = weight;
+                 weeklyTotalWeight[i] += uint128(weight);
+            }
         }
     }
 
