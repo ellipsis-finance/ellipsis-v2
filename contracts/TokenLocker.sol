@@ -114,14 +114,16 @@ contract TokenLocker {
         @notice Get the current lock weight for a user
      */
     function userWeight(address _user) external view returns (uint256) {
-        return uint256(weeklyLockData[_user][getWeek()].weight);
+        return weeklyWeightOf(_user, getWeek());
     }
 
     /**
         @notice Get the lock weight for a user in a given week
      */
-    function weeklyWeightOf(address _user, uint256 _week) external view returns (uint256) {
-        return uint256(weeklyLockData[_user][_week].weight);
+    function weeklyWeightOf(address _user, uint256 _week) public view returns (uint256) {
+        uint256 weight = uint256(weeklyLockData[_user][_week].weight);
+        if (_week < 13) weight += legacyLockWeight[_user][_week];
+        return weight;
     }
 
     /**
@@ -160,7 +162,7 @@ contract TokenLocker {
         @notice Get the user lock weight and total lock weight for the given week
      */
     function weeklyWeight(address _user, uint256 _week) external view returns (uint256, uint256) {
-        return (weeklyLockData[_user][_week].weight, weeklyTotalWeight[_week]);
+        return (weeklyWeightOf(_user, _week), weeklyTotalWeight[_week]);
     }
 
     /**
