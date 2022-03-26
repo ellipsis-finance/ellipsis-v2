@@ -24,7 +24,8 @@ contract EllipsisToken2 is IERC20 {
     bool isMinterSet;
 
     event TokensMigrated(
-        address indexed user,
+        address indexed sender,
+        address indexed receiver,
         uint256 oldAmount,
         uint256 newAmount
     );
@@ -58,6 +59,33 @@ contract EllipsisToken2 is IERC20 {
         emit MintersSet(msg.sender, _minters);
     }
 
+    function mint(address _to, uint256 _value) external returns (bool) {
+        require(minters[msg.sender], "Not a minter");
+        balanceOf[_to] += _value;
+        totalSupply += _value;
+        require(maxTotalSupply >= totalSupply, "Max supply");
+        emit Transfer(address(0), _to, _value);
+        return true;
+    }
+
+    /**
+        @notice Burn EPS tokens in order to receive EPX
+        @dev This function may be called immediately, however EPX tokens
+             cannot be transferred prior to `startTime`.
+        @param _receiver Address to mint the new EPX balance to
+        @param _amount Amount of EPS tokens to burn for EPX
+        @return bool success
+     */
+    function migrate(address _receiver, uint256 _amount) external returns (bool) {
+        oldToken.transferFrom(msg.sender, address(0), _amount);
+        totalMigrated += _amount;
+        uint256 newAmount = _amount * migrationRatio;
+        balanceOf[_receiver] += newAmount;
+        emit Transfer(address(0), _receiver, newAmount);
+        emit TokensMigrated(msg.sender, _receiver, _amount, newAmount);
+        return true;
+    }
+
     function approve(address _spender, uint256 _value) external override returns (bool) {
         allowance[msg.sender][_spender] = _value;
         emit Approval(msg.sender, _spender, _value);
@@ -77,7 +105,7 @@ contract EllipsisToken2 is IERC20 {
         @notice Transfer tokens to a specified address
         @param _to The address to transfer to
         @param _value The amount to be transferred
-        @return Success boolean
+        @return bool success
      */
     function transfer(address _to, uint256 _value) public override returns (bool) {
         _transfer(msg.sender, _to, _value);
@@ -89,7 +117,7 @@ contract EllipsisToken2 is IERC20 {
         @param _from The address which you want to send tokens from
         @param _to The address which you want to transfer to
         @param _value The amount of tokens to be transferred
-        @return Success boolean
+        @return bool success
      */
     function transferFrom(
         address _from,
@@ -108,23 +136,4 @@ contract EllipsisToken2 is IERC20 {
         _transfer(_from, _to, _value);
         return true;
     }
-
-    function mint(address _to, uint256 _value) external returns (bool) {
-        require(minters[msg.sender], "Not a minter");
-        balanceOf[_to] += _value;
-        totalSupply += _value;
-        require(maxTotalSupply >= totalSupply, "Max supply");
-        emit Transfer(address(0), _to, _value);
-        return true;
-    }
-
-    function migrate(uint256 _amount) external returns (bool) {
-        oldToken.transferFrom(msg.sender, address(0), _amount);
-        totalMigrated += _amount;
-        uint256 newAmount = _amount * migrationRatio;
-        balanceOf[msg.sender] += newAmount;
-        emit Transfer(address(0), msg.sender, newAmount);
-        emit TokensMigrated(msg.sender, _amount, newAmount);
-    }
-
 }
