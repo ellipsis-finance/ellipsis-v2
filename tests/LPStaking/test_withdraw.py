@@ -7,14 +7,12 @@ from brownie import accounts, chain
 def setup(eps2, locker, voter, lp_tokens, lp_staker, alice, bob, start_time, pools):
     # hand out some eps
     for acct in [alice, bob]:
-        eps2.mint(acct, 1500000 * 10 ** 18, {'from': alice})
+        eps2.mint(acct, 15000000 * 10 ** 18, {'from': alice})
         eps2.approve(locker, 2 ** 256 - 1, {"from": acct})
-    # get the chain past the eps2 frozen time
     delta = start_time - chain.time()
     chain.mine(timedelta=delta)
-    # lock some eps to have some vote weight
-    locker.lock(alice, 100000 * 10 ** 18, 10, {"from": alice})
-    locker.lock(bob, 200000 * 10 ** 18, 2, {"from": bob})
+    locker.lock(alice, 15000000 * 10 ** 18, 30, {"from": alice})
+    locker.lock(bob, 15000000 * 10 ** 18, 30, {"from": bob})
 
     amount = 10**19
     for index in range(5):

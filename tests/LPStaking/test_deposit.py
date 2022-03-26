@@ -2,10 +2,10 @@ import brownie
 import pytest
 from brownie import ZERO_ADDRESS, accounts, chain
 
-
+# Vote for incentives on pools 1-5
+# doesn't move past vote week
 @pytest.fixture(scope="module")
 def setup_gauges(voter, lp_tokens, pools, locker, alice, bob):
-    locker.lock(alice, 50000 * 10 ** 18, 52, {"from": alice})
     for index in range(5):
         # bump past first week
         chain.mine(timedelta=86400 * 14)
@@ -19,18 +19,19 @@ def setup_gauges(voter, lp_tokens, pools, locker, alice, bob):
         assert voter.isApproved(lp_tokens[index]) == True
 
 
+# Alice and Bob get EPX and lock it for vote weight.
 @pytest.fixture(scope="module", autouse=True)
 def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, start_time):
     lp_tokens[0].setMinter(pools[0], {'from': alice})
-    lp_tokens[1].setMinter(pools[1], {'from': alice})
+    lp_tokens[1].setMinter(pools[1])
 
     for acct in [alice, bob]:
-        eps2.mint(acct, 1500000 * 10 ** 18, {'from': alice})
+        eps2.mint(acct, 15000000 * 10 ** 18, {'from': alice})
         eps2.approve(locker, 2 ** 256 - 1, {"from": acct})
     delta = start_time - chain.time()
     chain.mine(timedelta=delta)
-    locker.lock(alice, 100000 * 10 ** 18, 1, {"from": alice})
-    locker.lock(bob, 200000 * 10 ** 18, 2, {"from": bob})
+    locker.lock(alice, 15000000 * 10 ** 18, 30, {"from": alice})
+    locker.lock(bob, 15000000 * 10 ** 18, 30, {"from": bob})
 
 
 # no revert string here
@@ -68,20 +69,27 @@ def test_deposit_insufficient_balance(lp_staker, pools, lp_tokens, alice, charli
 
 
 def test_deposit(lp_staker, setup_gauges, lp_tokens, alice):
-    # set up to be able to test
-    user_bal0 = lp_staker.userInfo(lp_tokens[0], alice);
-    lp_staker_bal0 = lp_tokens[0].balanceOf(lp_staker);
+    # amount of LP that will be deposited and tested for
     amount = 10**19
+
+    # user balance in staker
+    user_bal0 = lp_staker.userInfo(lp_tokens[0], alice);
+    # lp tokens in staker
+    lp_staker_bal0 = lp_tokens[0].balanceOf(lp_staker);
     lp_tokens[0].mint(alice, amount, {"from": alice})
     lp_tokens[0].approve(lp_staker, amount, {"from": alice})
+
     # deposit LP
     lp_staker.deposit(lp_tokens[0], amount, 1, {"from": alice})
+
     # get pool info
     tx = lp_staker.poolInfo(lp_tokens[0])
-    assert tx[0] == amount
+    # user balance in staker
     user_bal1 = lp_staker.userInfo(lp_tokens[0], alice);
+    # lp tokens in staker
     lp_staker_bal1 = lp_tokens[0].balanceOf(lp_staker);
-
+ 
+    # assert tx[0] - lp_staker_bal0 == amount
     assert user_bal1[0] - user_bal0[0] == amount
     assert lp_staker_bal1 - lp_staker_bal0 == amount
 

@@ -8,27 +8,27 @@ from brownie import ZERO_ADDRESS, accounts, chain
 
 @pytest.fixture(scope="module", autouse=True)
 def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, charlie, dan, start_time):
-    # voter.setLpStaking(lp_staker, {'from': alice})
     lp_tokens[0].setMinter(pools[0], {'from': alice})
     lp_tokens[1].setMinter(pools[1], {'from': alice})
 
     for acct in [alice, bob, charlie, dan]:
-        eps2.mint(acct, 1500000 * 10 ** 18, {'from': alice})
-        assert eps2.balanceOf(acct) == 1500000 * 10 ** 18
+        eps2.mint(acct, 15000000 * 10 ** 18, {'from': alice})
+        assert eps2.balanceOf(acct) == 15000000 * 10 ** 18
         eps2.approve(locker, 2 ** 256 - 1, {"from": acct})
         lp_tokens[0].mint(acct, 100000 * 10 ** 18, {'from': acct})
         lp_tokens[0].approve(lp_staker, 2 ** 256 - 1, {"from": acct})
+
     # move ahead to allow tfer of EPS
     delta = start_time - chain.time()
     chain.mine(timedelta=delta)
     # lock EPS
-    locker.lock(alice, 100000 * 10 ** 18, 52, {"from": alice})
-    locker.lock(bob, 100000 * 10 ** 18, 52, {"from": bob})
-    locker.lock(charlie, 100000 * 10 ** 18, 52, {"from": charlie})
+    locker.lock(alice, 15000000 * 10 ** 18, 30, {"from": alice})
+    locker.lock(bob, 15000000 * 10 ** 18, 30, {"from": bob})
+    locker.lock(charlie, 15000000 * 10 ** 18, 30, {"from": charlie})
 
     # set Alice n Bob up to stake
     for index in range(1): # just doing one gauge for the moment
-        # bump past first week
+        # bump past first 2 weeks to be able to vote
         chain.mine(timedelta=86400 * 14)
         # set the minter/pools on the lpToken
         lp_tokens[index].setMinter(pools[index], {"from": alice})
@@ -38,6 +38,7 @@ def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, charlie,
         voter.voteForTokenApproval(index, 2**256-1, {"from": alice})
         # assert the token was approved
         assert voter.isApproved(lp_tokens[index]) == True
+
 
 def test_equal_rewards(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, charlie, dan):
     # stake. then claim before any voting week to update each user's boost
@@ -77,8 +78,7 @@ def test_equal_rewards(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, ch
     assert (eps_alice1-eps_alice0) == (eps_bob1-eps_bob0) == (eps_charlie1-eps_charlie0)
 
 
-# Alice and Dan are locked, Alice has staked EPS however Dan has not. Poor Dan. Alice
-# should have full boost and 2.5x the rewards of dan.
+# Alice and Dan are locked, Alice has staked EPS however Dan has not. Poor Dan. 
 def test_boost_calculation_alice_versus_dan(lp_staker, lp_tokens, locker, eps2, voter, alice, bob, charlie, dan):
     lp_staker.deposit(lp_tokens[0], 100000 * 10 ** 18, 1, {"from": alice})
     lp_staker.deposit(lp_tokens[0], 100000 * 10 ** 18, 1, {"from": dan})
@@ -94,8 +94,7 @@ def test_boost_calculation_alice_versus_dan(lp_staker, lp_tokens, locker, eps2, 
 
     eps_alice0 = eps2.balanceOf(alice, {"from": alice})
     eps_dan0 = eps2.balanceOf(dan, {"from": dan})
-    # chain.mine(timedelta=86400 * 7)
-    # print('Claim in week:', voter.getWeek())
+
     lp_staker.claim(alice, [lp_tokens[0]], {"from": alice})
     lp_staker.claim(dan, [lp_tokens[0]], {"from": dan})
 
