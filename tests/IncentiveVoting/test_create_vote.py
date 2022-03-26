@@ -2,23 +2,21 @@ import brownie
 import pytest
 from brownie import chain, ZERO_ADDRESS
 
-
 @pytest.fixture(scope="module", autouse=True)
 def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, start_time):
     lp_tokens[0].setMinter(pools[0], {'from': alice})
     lp_tokens[1].setMinter(pools[1])
 
     for acct in [alice, bob]:
-        eps2.mint(acct, 1500000 * 10 ** 18, {'from': alice})
+        eps2.mint(acct, 15000000 * 10 ** 18, {'from': alice})
         eps2.approve(locker, 2 ** 256 - 1, {"from": acct})
     delta = start_time - chain.time()
     chain.mine(timedelta=delta)
-    locker.lock(alice, 150000 * 10 ** 18, 1, {"from": alice})
-    locker.lock(bob, 200000 * 10 ** 18, 2, {"from": bob})
+    locker.lock(alice, 15000000 * 10 ** 18, 30, {"from": alice})
+    locker.lock(bob, 15000000 * 10 ** 18, 30, {"from": bob})
 
 
-
-def test_create_token_approval_vote(voter, alice, lp_tokens):
+def test_create_token_approval_vote(voter, locker, alice, lp_tokens):
     chain.mine(timedelta=86400 * 14)
     tx = voter.createTokenApprovalVote(lp_tokens[0], {"from": alice})
     assert tx.events['TokenApprovalVoteCreated']['token'] == lp_tokens[0]
@@ -78,7 +76,6 @@ def test_vote_same_token_twice_for_approval_vote(voter, lp_tokens, alice, bob):
     # first vote
     voter.createTokenApprovalVote(lp_tokens[0], {"from": alice})
     voter.voteForTokenApproval(0, 2**256-1, {"from": alice})
-    voter.voteForTokenApproval(0, 2**256-1, {"from": bob})
 
     chain.mine(timedelta=86400 * 14)
     assert voter.isApproved(lp_tokens[0]) == True

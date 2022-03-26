@@ -11,7 +11,8 @@ INITIAL_REWARDS_PER_SECOND = 2893518518518518518  # 7.5 million tokens over 30 d
 
 MAX_LOCK_WEEKS = 52
 QUORUM_PCT = 30
-TOKEN_APPROVAL_WEIGHT = 50000 * 10**18
+#  at 20 cents per token (pre-migration) it takes ~$11k of locked for 52 weeks to make a vote
+TOKEN_APPROVAL_WEIGHT = 250_000_000 * 10 ** 18
 
 # might need to mock these or just test on a fork
 INITIAL_POOLS = [
