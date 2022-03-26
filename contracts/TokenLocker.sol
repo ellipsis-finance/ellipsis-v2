@@ -32,10 +32,10 @@ contract TokenLocker {
     // `weeklyTotalWeight` and `weeklyWeightOf` track the total lock weight for each week,
     // calculated as the sum of [number of tokens] * [weeks to unlock] for all active locks.
     // The array index corresponds to the number of the epoch week.
-    uint128[9362] public weeklyTotalWeight;
+    uint128[65535] public weeklyTotalWeight;
 
     // `weeklyLockData` tracks the total lock weights and unlockable token balances for each user.
-    mapping(address => LockData[9362]) weeklyLockData;
+    mapping(address => LockData[65535]) weeklyLockData;
 
     // `legacyLockData` tracks lock weights in the old EPS v1 system. These weights are creditted
     // to the user upon calling `registerLegacyLocks`. They differ from a normal locked balance
@@ -250,7 +250,7 @@ contract TokenLocker {
         require(_weeks < _newWeeks, "newWeeks must be greater than weeks");
         require(_amount > 0, "Amount must be nonzero");
 
-        LockData[9362] storage data = weeklyLockData[msg.sender];
+        LockData[65535] storage data = weeklyLockData[msg.sender];
         uint256 start = getWeek();
         uint256 end = start + _weeks;
         data[end].unlock -= uint128(_amount);
@@ -312,7 +312,7 @@ contract TokenLocker {
     function streamableBalance(address _user) public view returns (uint256) {
         uint256 finishedWeek = getWeek();
 
-        LockData[9362] storage data = weeklyLockData[_user];
+        LockData[65535] storage data = weeklyLockData[_user];
         uint256 amount;
 
         for (
@@ -355,7 +355,7 @@ contract TokenLocker {
     ) internal {
         uint256 oldEnd = _start + _oldRounds;
         uint256 end = _start + _rounds;
-        LockData[9362] storage data = weeklyLockData[_user];
+        LockData[65535] storage data = weeklyLockData[_user];
         for (uint256 i = _start; i < end; i++) {
             uint256 amount = _amount * (end - i);
             if (i < oldEnd) {
