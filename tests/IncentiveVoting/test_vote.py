@@ -144,15 +144,16 @@ def test_vote_multiple_same_call(voter, alice, lp_tokens):
 
 
 # def test_vote_for_hardcoded_two(voter, alice, lp_tokens, setup_gauges):
-#     voter.vote([lp_tokens[0]], [-1000], {'from': alice})
+#     voter.vote([lp_tokens[0]], [1000], {'from': alice})
 #     voter.vote([setup_gauges[1]], [500], {'from': alice})
 #     data = voter.getCurrentVotes()
-#     assert data == [
-#         (lp_tokens[0], -1000),
-#         (setup_gauges[1], 582),
-#         (setup_gauges[0], 82),
-#         (ZERO_ADDRESS, 0),
-#     ]
+#     print(data)
+    # assert data == [
+    #     (lp_tokens[0], -1000),
+    #     (setup_gauges[1], 582),
+    #     (setup_gauges[0], 82),
+    #     (ZERO_ADDRESS, 0),
+    # ]
 
 
 # def test_vote_for_hardcoded_one(voter, alice, lp_tokens, setup_gauges):
@@ -192,66 +193,6 @@ def test_vote_multiple_same_call(voter, alice, lp_tokens):
 #         (setup_gauges[1], 1),
 #     ]
 
-
-# def test_no_votes_this_week(voter, alice, lp_tokens, setup_gauges):
-#     voter.vote([lp_tokens[0]], [-200], {'from': alice})
-#     chain.mine(timedelta=86400 * 7 + 1)
-#     data = voter.getCurrentVotes()
-#     assert data == [
-#         (setup_gauges[0], 1),
-#         (setup_gauges[1], 1),
-#     ]
-
-
-# def test_net_vote_weight_zero(voter, alice, lp_tokens, setup_gauges):
-#     voter.vote([lp_tokens[0]], [200], {'from': alice})
-#     voter.vote([lp_tokens[0]], [-200], {'from': alice})
-#     data = voter.getCurrentVotes()
-#     assert data == [
-#         (setup_gauges[0], 1),
-#         (setup_gauges[1], 1),
-#     ]
-
-
-# def test_net_vote_weight_zero_single_call(voter, alice, lp_tokens, setup_gauges):
-    # week = voter.getWeek()
-#     voter.vote([lp_tokens[0], lp_tokens[0]], [200, -200], {'from': alice})
-
-#     assert voter.userVotes(alice, week) == 400
-#     assert voter.tokenVotes(lp_tokens[0], week) == 0
-
-#     data = voter.getCurrentVotes()
-#     assert data == [
-#         (setup_gauges[0], 1),
-#         (setup_gauges[1], 1),
-#     ]
-
-
-# def test_net_vote_weight_zero_shifts_other(voter, alice, lp_tokens, setup_gauges):
-#     voter.vote([lp_tokens[0]], [200], {'from': alice})
-#     voter.vote([lp_tokens[1]], [300], {'from': alice})
-#     voter.vote([lp_tokens[2]], [500], {'from': alice})
-#     voter.vote([lp_tokens[0]], [-200], {'from': alice})
-#     data = voter.getCurrentVotes()
-#     assert data[1][2:5] == [
-#         (lp_tokens[2], 500),
-#         (lp_tokens[1], 300),
-#     ]
-
-
-# def test_net_vote_weight_zero_shifts_other2(voter, alice, lp_tokens, setup_gauges):
-#     voter.vote([lp_tokens[0]], [200], {'from': alice})
-#     voter.vote([lp_tokens[1]], [300], {'from': alice})
-#     voter.vote([lp_tokens[2]], [500], {'from': alice})
-#     voter.vote([lp_tokens[0]], [-200], {'from': alice})
-#     voter.vote([lp_tokens[3]], [300], {'from': alice})
-#     voter.vote([lp_tokens[2]], [400], {'from': alice})
-#     data = voter.getCurrentVotes()
-#     assert data[1][2:5] == [
-#         (lp_tokens[2], 900),
-#         (lp_tokens[1], 300),
-#         (lp_tokens[3], 300),
-#     ]
 
 
 def test_same_weight_increased(voter, alice, lp_tokens):
