@@ -102,6 +102,14 @@ def pools(Pool, alice):
         ret.append(Pool.deploy({'from': alice}))
     return ret
 
+@pytest.fixture(scope="session")
+def setup_gauges():
+    return INITIAL_POOLS
+    # ret = []
+    # for i in INITIAL_POOLS:
+    #     ret.append(Pool.deploy({'from': alice}))
+
+
 
 # ellipsis contracts
 
