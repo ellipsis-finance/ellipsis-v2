@@ -4,8 +4,8 @@ from brownie import chain
 
 
 @pytest.fixture(scope="module", autouse=True)
-def setup(eps2, locker, lp_staker, alice, bob, start_time):
-    for acct in [alice, bob]:
+def setup(eps2, locker, lp_staker, alice, bob, charlie, start_time):
+    for acct in [alice, bob, charlie]:
         eps2.mint(acct, 10 ** 18, {'from': alice})
         eps2.approve(locker, 2 ** 256 - 1, {"from": acct})
     delta = start_time - chain.time()
@@ -39,7 +39,6 @@ def test_multiple_new_locks(locker, eps2, alice):
         (8, 1500),
         (52, 300),
     ]
-
 
 def test_new_lock_different_receiver(locker, eps2, alice, bob):
     locker.lock(bob, 1000, 10, {"from": alice})
@@ -186,3 +185,4 @@ def test_extend_wrong_week(locker, eps2, alice):
     locker.lock(alice, 1000, 10, {"from": alice})
     with brownie.reverts():
         locker.extendLock(1000, 9, 13, {"from": alice})
+
