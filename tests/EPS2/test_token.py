@@ -8,7 +8,7 @@ from brownie.test import given, strategy
 def setup(eps2, alice):
     eps2.setMinters([alice], {"from": alice})
 
-# basic tests for now, can be broken up into 
+# basic tests for now, can be broken up into
 # other tests once built out more
 
 def test_is_minter_set(eps2, alice):
@@ -46,12 +46,12 @@ def test_transfer_before_starttime(eps2, alice, bob):
 
 
 def test_transfer_after_starttime(eps2, alice, bob, start_time):
-    bob_bal0 = eps2.balanceOf(bob)   
+    bob_bal0 = eps2.balanceOf(bob)
     eps2.mint(alice, 10000000, {"from": alice})
     delta = start_time - chain.time()
     chain.mine(timedelta=delta)
     eps2.transfer(bob, 5)
-    bob_bal1 = eps2.balanceOf(bob)   
+    bob_bal1 = eps2.balanceOf(bob)
     assert bob_bal1 - bob_bal0 == 5
 
 
@@ -60,7 +60,7 @@ def test_migrate(eps2, eps, alice):
     amount = 100 * 10 ** 18
     eps._mint_for_testing(alice, amount)
     eps.approve(eps2, amount, {"from": alice})
-    eps2.migrate(amount, {"from": alice})
+    eps2.migrate(alice, amount, {"from": alice})
     alice_bal1 = eps2.balanceOf(alice)
     alice_after = alice_bal0 - alice_bal1
     migration_ratio = eps2.migrationRatio()
@@ -73,4 +73,4 @@ def test_migrate_too_many(eps2, eps, alice):
     eps._mint_for_testing(alice, amount)
     eps.approve(eps2, amount+10, {"from": alice})
     with brownie.reverts():
-        eps2.migrate(amount+10, {"from": alice})
+        eps2.migrate(alice, amount+10, {"from": alice})

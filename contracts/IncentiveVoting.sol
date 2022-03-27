@@ -44,13 +44,16 @@ contract IncentiveVoting is Ownable {
     }
 
     // token -> week -> votes received
-    mapping(address => mapping(uint256 => uint256)) public tokenVotes;
+    mapping(address => uint256[65535]) public tokenVotes;
 
     // user -> week -> votes used
-    mapping(address => mapping(uint256 => uint256)) public userVotes;
+    mapping(address => uint256[65535]) public userVotes;
+
+    // user -> token -> week -> votes for pool
+    mapping(address => mapping(address => uint256[65535])) public userTokenVotes;
 
     // week -> total votes used
-    mapping(uint256 => uint256) public totalVotes;
+    uint256[65535] public totalVotes;
 
     // data about token approval votes
     TokenApprovalVote[] public tokenApprovalVotes;
@@ -225,6 +228,7 @@ contract IncentiveVoting is Ownable {
             require(isApproved[token], "Not approved for incentives");
             tokenVotes[token][week] += amount;
             totalVotes[week] += amount;
+            userTokenVotes[msg.sender][token][week] += amount;
             usedVotes += amount;
         }
 

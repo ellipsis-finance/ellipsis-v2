@@ -4,6 +4,16 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
+struct LockedBalance {
+    uint256 amount;
+    uint256 unlockTime;
+}
+
+interface IMultiFeeDistribution {
+    function lockedBalances(address) view external returns (uint, uint, uint, LockedBalance[] memory);
+}
+
+
 contract TokenLocker {
     using SafeERC20 for IERC20;
 
@@ -21,10 +31,15 @@ contract TokenLocker {
     // `weeklyTotalWeight` and `weeklyWeightOf` track the total lock weight for each week,
     // calculated as the sum of [number of tokens] * [weeks to unlock] for all active locks.
     // The array index corresponds to the number of the epoch week.
-    uint128[9362] public weeklyTotalWeight;
+    uint128[65535] public weeklyTotalWeight;
 
     // `weeklyLockData` tracks the total lock weights and unlockable token balances for each user.
-    mapping(address => LockData[9362]) weeklyLockData;
+    mapping(address => LockData[65535]) weeklyLockData;
+
+    // `legacyLockData` tracks lock weights in the old EPS v1 system. These weights are creditted
+    // to the user upon calling `registerLegacyLocks`. They differ from a normal locked balance
+    // because they cannot be withdrawn.
+    mapping(address => uint256[13]) public legacyLockWeight;
 
     // `withdrawnUntil` tracks the most recent week for which each user has withdrawn their
     // expired token locks. Unlock values in `weeklyLockData` with an index less than the related
@@ -39,12 +54,13 @@ contract TokenLocker {
     // when set to true, other accounts cannot call `lock` on behalf of an account
     mapping(address => bool) public blockThirdPartyActions;
 
+    IMultiFeeDistribution public immutable epsV1Staker;
     IERC20 public immutable stakingToken;
+
     uint256 public immutable startTime;
-
-    uint256 constant WEEK = 86400 * 7;
-
     uint256 public immutable MAX_LOCK_WEEKS;
+    uint256 public immutable MIGRATION_RATIO;
+    uint256 constant WEEK = 86400 * 7;
 
     event NewLock(address indexed user, uint256 amount, uint256 lockWeeks);
     event ExtendLock(
@@ -70,11 +86,15 @@ contract TokenLocker {
      */
     constructor(
         IERC20 _stakingToken,
+        IMultiFeeDistribution _epsV1Staker,
         uint256 _startTime,
-        uint256 _maxLockWeeks
+        uint256 _maxLockWeeks,
+        uint256 _migrationRatio
     ) {
         MAX_LOCK_WEEKS = _maxLockWeeks;
+        MIGRATION_RATIO = _migrationRatio;
         stakingToken = _stakingToken;
+        epsV1Staker = _epsV1Staker;
         // must start on the epoch week
         require((_startTime / WEEK) * WEEK == _startTime, "!epoch week");
         startTime = _startTime;
@@ -96,14 +116,16 @@ contract TokenLocker {
         @notice Get the current lock weight for a user
      */
     function userWeight(address _user) external view returns (uint256) {
-        return uint256(weeklyLockData[_user][getWeek()].weight);
+        return weeklyWeightOf(_user, getWeek());
     }
 
     /**
         @notice Get the lock weight for a user in a given week
      */
-    function weeklyWeightOf(address _user, uint256 _week) external view returns (uint256) {
-        return uint256(weeklyLockData[_user][_week].weight);
+    function weeklyWeightOf(address _user, uint256 _week) public view returns (uint256) {
+        uint256 weight = uint256(weeklyLockData[_user][_week].weight);
+        if (_week < 13) weight += legacyLockWeight[_user][_week];
+        return weight;
     }
 
     /**
@@ -142,7 +164,7 @@ contract TokenLocker {
         @notice Get the user lock weight and total lock weight for the given week
      */
     function weeklyWeight(address _user, uint256 _week) external view returns (uint256, uint256) {
-        return (weeklyLockData[_user][_week].weight, weeklyTotalWeight[_week]);
+        return (weeklyWeightOf(_user, _week), weeklyTotalWeight[_week]);
     }
 
     /**
@@ -230,7 +252,7 @@ contract TokenLocker {
         require(_weeks < _newWeeks, "newWeeks must be greater than weeks");
         require(_amount > 0, "Amount must be nonzero");
 
-        LockData[9362] storage data = weeklyLockData[msg.sender];
+        LockData[65535] storage data = weeklyLockData[msg.sender];
         uint256 start = getWeek();
         uint256 end = start + _weeks;
         data[end].unlock -= uint128(_amount);
@@ -292,7 +314,7 @@ contract TokenLocker {
     function streamableBalance(address _user) public view returns (uint256) {
         uint256 finishedWeek = getWeek();
 
-        LockData[9362] storage data = weeklyLockData[_user];
+        LockData[65535] storage data = weeklyLockData[_user];
         uint256 amount;
 
         for (
@@ -335,7 +357,7 @@ contract TokenLocker {
     ) internal {
         uint256 oldEnd = _start + _oldRounds;
         uint256 end = _start + _rounds;
-        LockData[9362] storage data = weeklyLockData[_user];
+        LockData[65535] storage data = weeklyLockData[_user];
         for (uint256 i = _start; i < end; i++) {
             uint256 amount = _amount * (end - i);
             if (i < oldEnd) {
@@ -343,6 +365,42 @@ contract TokenLocker {
             }
             weeklyTotalWeight[i] += uint128(amount);
             data[i].weight += uint128(amount);
+        }
+    }
+
+    /**
+        @notice Register EPSv1 locked balances within the v2 protocol
+        @dev Each users with a v1 lock must call once to register their balance.
+             V1 locks are given a 4x boost to their weight relative to the unlock time.
+        @param _user User address to register
+     */
+    function registerLegacyLocks(address _user) external {
+        (,,,LockedBalance[] memory lockData) = epsV1Staker.lockedBalances(_user);
+        require(lockData.length > 0, "No legacy locks");
+        uint256 week = getWeek();
+        require(legacyLockWeight[_user][week] == 0, "Already registered");
+
+        uint256 remainingOffset = block.timestamp / WEEK;
+        uint256[13] memory lockWeights;
+        for(uint i = 0; i < lockData.length; i++) {
+            uint256 amount = lockData[i].amount * MIGRATION_RATIO;
+            uint256 remaining = lockData[i].unlockTime / WEEK - remainingOffset;
+            // start registering from this week - giving credit for already passed weeks
+            // will break accounting elsewhere within the system
+            uint256 index = week;
+            while (remaining > 0) {
+                lockWeights[index] += amount * remaining * 4;
+                index++;
+                remaining--;
+            }
+        }
+
+        for (uint i = 0; i < 13; i++) {
+            uint256 weight = lockWeights[i];
+            if (weight > 0) {
+                 legacyLockWeight[_user][i] = weight;
+                 weeklyTotalWeight[i] += uint128(weight);
+            }
         }
     }
 
