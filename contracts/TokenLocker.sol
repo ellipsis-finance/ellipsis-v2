@@ -4,7 +4,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
-
 struct LockedBalance {
     uint256 amount;
     uint256 unlockTime;
@@ -60,6 +59,7 @@ contract TokenLocker {
 
     uint256 public immutable startTime;
     uint256 public immutable MAX_LOCK_WEEKS;
+    uint256 public immutable MIGRATION_RATIO;
     uint256 constant WEEK = 86400 * 7;
 
     event NewLock(address indexed user, uint256 amount, uint256 lockWeeks);
@@ -88,9 +88,11 @@ contract TokenLocker {
         IERC20 _stakingToken,
         IMultiFeeDistribution _epsV1Staker,
         uint256 _startTime,
-        uint256 _maxLockWeeks
+        uint256 _maxLockWeeks,
+        uint256 _migrationRatio
     ) {
         MAX_LOCK_WEEKS = _maxLockWeeks;
+        MIGRATION_RATIO = _migrationRatio;
         stakingToken = _stakingToken;
         epsV1Staker = _epsV1Staker;
         // must start on the epoch week
@@ -381,7 +383,7 @@ contract TokenLocker {
         uint256 remainingOffset = block.timestamp / WEEK;
         uint256[13] memory lockWeights;
         for(uint i = 0; i < lockData.length; i++) {
-            uint256 amount = lockData[i].amount;
+            uint256 amount = lockData[i].amount * MIGRATION_RATIO;
             uint256 remaining = lockData[i].unlockTime / WEEK - remainingOffset;
             // start registering from this week - giving credit for already passed weeks
             // will break accounting elsewhere within the system

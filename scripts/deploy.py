@@ -47,7 +47,7 @@ def main():
 
     # deploy the new contracts
     token = EllipsisToken2.deploy(TOKEN_TRANSFERS_TIME, MAX_SUPPLY, epsv1, MIGRATION_RATIO, {"from": acct})
-    locker = TokenLocker.deploy(token, stakingv1, START_TIME, MAX_LOCK_WEEKS, {'from': acct})
+    locker = TokenLocker.deploy(token, stakingv1, START_TIME, MAX_LOCK_WEEKS, MIGRATION_RATIO, {'from': acct})
     voter = IncentiveVoting.deploy(locker, INITIAL_REWARDS_PER_SECOND, QUORUM_PCT, TOKEN_APPROVAL_WEIGHT, {'from': acct})
     fee_distro = FeeDistributor.deploy(locker, {'from': acct})
     staking = EllipsisLpStaking.deploy(token, voter, locker, MAX_MINTABLE, {'from': acct})
