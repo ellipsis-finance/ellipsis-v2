@@ -56,7 +56,8 @@ def main():
     # set addresses
     voter.setLpStaking(staking, INITIAL_POOLS, {'from': acct})
     factory.set_fee_receiver(fee_distro, {'from': acct})
-    token.setMinters([staking, merkle], {'from': acct})
+    token.addMinter(merkle, {'from': acct})
+    token.addMinter(staking, {'from': acct})
 
     # for factory pools included in the initial rewards, set the deposit contract
     for pool in INITIAL_POOLS:

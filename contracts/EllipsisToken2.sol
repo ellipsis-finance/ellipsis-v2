@@ -1,10 +1,13 @@
 pragma solidity 0.8.12;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 
-contract EllipsisToken2 is IERC20 {
+contract EllipsisToken2 is IERC20, Ownable {
+    using Address for address;
 
     string public constant symbol = "EPX";
     string public constant name = "Ellipsis X";
@@ -21,7 +24,7 @@ contract EllipsisToken2 is IERC20 {
     mapping(address => mapping(address => uint256)) public override allowance;
 
     mapping(address => bool) public minters;
-    bool isMinterSet;
+    uint256 public minterCount;
 
     event TokensMigrated(
         address indexed sender,
@@ -29,9 +32,9 @@ contract EllipsisToken2 is IERC20 {
         uint256 oldAmount,
         uint256 newAmount
     );
-    event MintersSet(
-        address indexed caller,
-        address[] minters
+    event MinterSet(
+        address caller,
+        address minter
     );
 
     constructor(
@@ -48,15 +51,20 @@ contract EllipsisToken2 is IERC20 {
     }
 
     /**
-        @dev Minter rights must be given to `EllipsisLpStaking` and `MerkleDistributor`
+        @notice Approve a contract with token minter rights
+        @dev Two minters can be set. The first is `MerkleDistributor` which handles
+             the airdrop to v1 stakers. The second is `EllipsisLpStaking` which mints
+             EPX as it is earned by LPs. Ownership of this contract is renounced
+             after setting the second minter.
      */
-    function setMinters(address[] calldata _minters) external {
-        require(!isMinterSet);
-        isMinterSet = true;
-        for (uint256 i = 0; i < _minters.length; i++) {
-            minters[_minters[i]] = true;
-        }
-        emit MintersSet(msg.sender, _minters);
+    function addMinter(address _minter) external onlyOwner {
+        require(_minter.isContract(), "Minter must be a contract");
+        require(!minters[_minter], "Minter already set");
+
+        minterCount += 1;
+        emit MinterSet(msg.sender, _minter);
+
+        if (minterCount == 2) renounceOwnership();
     }
 
     function mint(address _to, uint256 _value) external returns (bool) {
