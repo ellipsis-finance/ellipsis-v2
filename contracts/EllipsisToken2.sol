@@ -60,7 +60,7 @@ contract EllipsisToken2 is IERC20, Ownable {
     function addMinter(address _minter) external onlyOwner {
         require(_minter.isContract(), "Minter must be a contract");
         require(!minters[_minter], "Minter already set");
-
+        minters[_minter] = true;
         minterCount += 1;
         emit MinterSet(msg.sender, _minter);
 
