@@ -4,6 +4,10 @@ Staking and emissions contracts for Ellipsis Finance v2.
 
 Used in combination with the Ellipsis [stableswap factory](https://github.com/ellipsis-finance/factory).
 
+## Development Status
+
+All core logic is considered final, however we are still performing internal reviews and additional testing. We do not expect any changes to public interfaces or control flow.
+
 ##  Contracts
 
 ### `EllipsisToken2`
@@ -28,4 +32,8 @@ Distribution of protocol fees according to user lock weights.
 
 ### `MerkleDistributor`
 
-One-time token distributor, used to airdrop EPX to users with locked EPS balances at the time of the migration.
+One-time token distributor, used to airdrop EPX to users with EPS balances that cannot be withdrawn from the v1 staker at the time of the migration.
+
+## Audit
+
+This codebase has been audited by Peckshield. The audit report is available [here](https://github.com/ellipsis-finance/ellipsis-audits/blob/master/PeckShield-Audit-Report-EllipsisV2Staking-v1.0.pdf).
