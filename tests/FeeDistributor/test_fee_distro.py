@@ -2,17 +2,23 @@ import brownie
 import pytest
 from brownie import chain
 
+def mint_epx_to_acct(eps, eps2, locker, amount, acct):
+    eps._mint_for_testing(acct, amount)
+    eps.approve(eps2, amount, {"from": acct})
+    eps2.migrate(acct, amount, {"from": acct})
+    eps2.approve(locker, amount, {"from": acct})
+    assert eps2.balanceOf(acct) == amount * 88
+
 
 @pytest.fixture(scope="module", autouse=True)
-def setup(eps2, incentive1, locker, fee_distro, lp_staker, start_time, alice, bob, charlie):
+def setup(eps2, eps, incentive1, locker, fee_distro, lp_staker, transfer_time, alice, bob, charlie):
     # move ahead to when eps2 is transferrable
-    delta = start_time - chain.time()
+    delta = transfer_time - chain.time()
     chain.mine(timedelta=delta)
     # mint some EPS2 to lock
     for acct in [bob, charlie]:
         # alice is a minter
-        eps2.mint(acct, 10 ** 18, {"from": alice})
-        eps2.approve(locker, 2 ** 256 - 1, {"from": acct})
+        mint_epx_to_acct(eps, eps2, locker, 10 ** 18, acct) 
         locker.lock(acct, 10 ** 18, 10, {"from": acct})
     
     # setup rewards

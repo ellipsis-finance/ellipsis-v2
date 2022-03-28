@@ -2,6 +2,14 @@ import brownie
 import pytest
 from brownie import ZERO_ADDRESS, accounts, chain
 
+def mint_epx_to_acct(eps, eps2, locker, amount, acct):
+    eps._mint_for_testing(acct, amount)
+    eps.approve(eps2, amount, {"from": acct})
+    eps2.migrate(acct, amount, {"from": acct})
+    eps2.approve(locker, amount, {"from": acct})
+    assert eps2.balanceOf(acct) == amount * 88
+
+
 # Vote for incentives on pools 1-5
 # doesn't move past vote week
 @pytest.fixture(scope="module")
@@ -21,14 +29,14 @@ def setup_gauges(voter, lp_tokens, pools, locker, alice, bob):
 
 # Alice and Bob get EPX and lock it for vote weight.
 @pytest.fixture(scope="module", autouse=True)
-def setup(eps2, locker, voter, lp_tokens, pools, lp_staker, alice, bob, start_time):
+def setup(eps2, eps, locker, voter, lp_tokens, pools, lp_staker, alice, bob, transfer_time):
     lp_tokens[0].setMinter(pools[0], {'from': alice})
     lp_tokens[1].setMinter(pools[1])
 
     for acct in [alice, bob]:
-        eps2.mint(acct, 15000000 * 10 ** 18, {'from': alice})
-        eps2.approve(locker, 2 ** 256 - 1, {"from": acct})
-    delta = start_time - chain.time()
+        mint_epx_to_acct(eps, eps2, locker, 15000000 * 10 ** 18, acct)
+        
+    delta = transfer_time - chain.time()
     chain.mine(timedelta=delta)
     locker.lock(alice, 15000000 * 10 ** 18, 30, {"from": alice})
     locker.lock(bob, 15000000 * 10 ** 18, 30, {"from": bob})

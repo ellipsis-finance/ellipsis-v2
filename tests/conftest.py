@@ -2,7 +2,10 @@ import pytest
 from brownie import ZERO_ADDRESS, accounts, chain
 from brownie_tokens import ERC20
 
-START_TIME =    1649894400  # 00:00:00 Thursday, April 14, 2022
+# epoch time that transfers of the new token are possible
+TOKEN_TRANSFERS_TIME = 1649808000  # 00:00:00 Thursday, April 13, 2022
+
+START_TIME =    1649289600  # 00:00:00 Thursday, April 7, 2022
 START_GAUGE_VOTING = START_TIME + (604800*2)
 MIGRATION_RATIO = 88  # 88 EPS2 for 1 EPS
 MAX_SUPPLY = 1_500_000_000 * 10 ** 18 * MIGRATION_RATIO  # increases the total supply by 50%
@@ -35,6 +38,11 @@ def max_supply():
 @pytest.fixture(scope="session")
 def start_time():
     return START_TIME
+
+
+@pytest.fixture(scope="session")
+def transfer_time():
+    return TOKEN_TRANSFERS_TIME
 
 
 @pytest.fixture(scope="session")
@@ -86,6 +94,10 @@ def incentive1():
 def incentive2():
     return ERC20({'from': alice})
 
+@pytest.fixture(scope="module")
+def v1_staker_mock():
+    return ERC20({'from': alice})
+
 
 @pytest.fixture(scope="module")
 def lp_tokens(RewardsToken, alice):
@@ -115,13 +127,13 @@ def setup_gauges():
 
 @pytest.fixture(scope="module")
 def eps2(EllipsisToken2, eps, alice):
-    token = EllipsisToken2.deploy(START_TIME, MAX_SUPPLY, eps, MIGRATION_RATIO, {'from': alice})
+    token = EllipsisToken2.deploy(TOKEN_TRANSFERS_TIME, MAX_SUPPLY, eps, MIGRATION_RATIO, {'from': alice})
     return token
 
 
 @pytest.fixture(scope="module")
 def locker(TokenLocker, eps2, alice):
-    locker = TokenLocker.deploy(eps2, START_TIME, MAX_LOCK_WEEKS, {'from': alice})
+    locker = TokenLocker.deploy(eps2, "0x2a435Ecb3fcC0E316492Dc1cdd62d0F189be5640", START_TIME, MAX_LOCK_WEEKS, MIGRATION_RATIO, {'from': alice})
     return locker
 
 
@@ -148,5 +160,5 @@ def fee_distro_tester(FeeDistributorTester, alice):
 def lp_staker(EllipsisLpStaking, eps2, locker, voter, alice):
     staking = EllipsisLpStaking.deploy(eps2, voter, locker, MAX_MINTABLE, {'from': alice})
     voter.setLpStaking(staking, INITIAL_POOLS, {"from": alice})
-    eps2.setMinters([alice, staking], {"from": alice})
+    eps2.addMinter(staking, {"from": alice})
     return staking
