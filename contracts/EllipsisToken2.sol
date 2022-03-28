@@ -60,10 +60,11 @@ contract EllipsisToken2 is IERC20, Ownable {
     function addMinter(address _minter) external onlyOwner {
         require(_minter.isContract(), "Minter must be a contract");
         require(!minters[_minter], "Minter already set");
+
         minters[_minter] = true;
         minterCount += 1;
-        emit MinterSet(msg.sender, _minter);
 
+        emit MinterSet(msg.sender, _minter);
         if (minterCount == 2) renounceOwnership();
     }
 
@@ -72,6 +73,7 @@ contract EllipsisToken2 is IERC20, Ownable {
         balanceOf[_to] += _value;
         totalSupply += _value;
         require(maxTotalSupply >= totalSupply, "Max supply");
+
         emit Transfer(address(0), _to, _value);
         return true;
     }
@@ -86,9 +88,12 @@ contract EllipsisToken2 is IERC20, Ownable {
      */
     function migrate(address _receiver, uint256 _amount) external returns (bool) {
         oldToken.transferFrom(msg.sender, address(0), _amount);
-        totalMigrated += _amount;
+
         uint256 newAmount = _amount * migrationRatio;
+        totalMigrated += _amount;
         balanceOf[_receiver] += newAmount;
+        totalSupply += newAmount;
+
         emit Transfer(address(0), _receiver, newAmount);
         emit TokensMigrated(msg.sender, _receiver, _amount, newAmount);
         return true;
