@@ -12,7 +12,7 @@ interface MintableToken {
 
 contract MerkleDistributor is Ownable {
 
-    mapping(address => bool) isClaimed;
+    mapping(address => bool) public isClaimed;
 
     bytes32 public root;
     MintableToken public immutable token;
