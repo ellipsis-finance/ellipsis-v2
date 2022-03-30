@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.12;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 
@@ -9,11 +10,11 @@ interface MintableToken {
 }
 
 
-contract MerkleDistributor {
+contract MerkleDistributor is Ownable {
 
     mapping(address => bool) isClaimed;
 
-    bytes32 public immutable root;
+    bytes32 public root;
     MintableToken public immutable token;
 
     event Claimed(
@@ -22,9 +23,13 @@ contract MerkleDistributor {
         address receiver
     );
 
-    constructor(MintableToken _token, bytes32 _root) {
+    constructor(MintableToken _token) {
         token = _token;
+    }
+
+    function setRoot(bytes32 _root) external onlyOwner {
         root = _root;
+        renounceOwnership();
     }
 
     function claim(
@@ -32,6 +37,7 @@ contract MerkleDistributor {
         address _receiver,
         bytes32[] calldata _merkleProof
     ) external {
+        require(root != 0x00, "Root not set");
         require(!isClaimed[msg.sender], "Already claimed");
 
         // Verify the merkle proof.
