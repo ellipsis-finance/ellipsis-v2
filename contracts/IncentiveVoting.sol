@@ -179,6 +179,25 @@ contract IncentiveVoting is Ownable {
     }
 
     /**
+        @notice Get data on current votes `_user` has made in the active week
+        @return _totalVotes Total number of votes from `_user` this week for all pools
+        @return _voteData Dynamic array of (token address, votes for token)
+     */
+    function getUserCurrentVotes(address _user)
+        external
+        view
+        returns (uint256 _totalVotes, Vote[] memory _voteData)
+    {
+        _voteData = new Vote[](approvedTokens.length);
+        uint256 week = getWeek();
+        for (uint i = 0; i < _voteData.length; i++) {
+            address token = approvedTokens[i];
+            _voteData[i] = Vote({token: token, votes: userTokenVotes[_user][token][week]});
+        }
+        return (userVotes[_user][week], _voteData);
+    }
+
+    /**
         @notice Get the amount of unused votes for for the current week being voted on
         @param _user Address to query
         @return uint Amount of unused votes
