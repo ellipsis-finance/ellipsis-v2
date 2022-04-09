@@ -168,33 +168,32 @@ contract IncentiveVoting is Ownable {
         @return _totalVotes Total number of votes this week for all pools
         @return _voteData Dynamic array of (token address, votes for token)
      */
-    function getCurrentVotes() external view returns (uint256 _totalVotes, Vote[] memory _voteData) {
+    function getVotes(uint256 _week) external view returns (uint256 _totalVotes, Vote[] memory _voteData) {
         _voteData = new Vote[](approvedTokens.length);
-        uint256 week = getWeek();
         for (uint i = 0; i < _voteData.length; i++) {
             address token = approvedTokens[i];
-            _voteData[i] = Vote({token: token, votes: tokenVotes[token][week]});
+            _voteData[i] = Vote({token: token, votes: tokenVotes[token][_week]});
         }
-        return (totalVotes[week], _voteData);
+        return (totalVotes[_week], _voteData);
     }
+
 
     /**
         @notice Get data on current votes `_user` has made in the active week
         @return _totalVotes Total number of votes from `_user` this week for all pools
         @return _voteData Dynamic array of (token address, votes for token)
      */
-    function getUserCurrentVotes(address _user)
+    function getUserVotes(address _user, uint256 _week)
         external
         view
         returns (uint256 _totalVotes, Vote[] memory _voteData)
     {
         _voteData = new Vote[](approvedTokens.length);
-        uint256 week = getWeek();
         for (uint i = 0; i < _voteData.length; i++) {
             address token = approvedTokens[i];
-            _voteData[i] = Vote({token: token, votes: userTokenVotes[_user][token][week]});
+            _voteData[i] = Vote({token: token, votes: userTokenVotes[_user][token][_week]});
         }
-        return (userVotes[_user][week], _voteData);
+        return (userVotes[_user][_week], _voteData);
     }
 
     /**
