@@ -78,8 +78,9 @@ contract IncentiveVoting is Ownable {
     mapping(address => bool) public isApproved;
     address[] public approvedTokens;
 
-    // Total amount of the protocol token distributed each week.
-    // Each week a new value is pushed onto the array.
+    // The amount of EPX tokens minted each second in a given period.
+    // Each item represents a 4 week epoch. New values are pushed onto
+    // the array over time as users call `vote`.
     uint256[] public rewardsPerSecond;
 
     // Minimum weight to create a new token approval vote
@@ -229,9 +230,9 @@ contract IncentiveVoting is Ownable {
         // update rewards per second, if required
         uint256 week = getWeek();
         uint256 length = rewardsPerSecond.length;
-        if (length < week / 4) {
+        if (length <= week / 4) {
             uint256 perSecond = rewardsPerSecond[length-1];
-            while (length < week / 4) {
+            while (length <= week / 4) {
                 perSecond = perSecond * 99 / 100;
                 length += 1;
                 rewardsPerSecond.push(perSecond);
