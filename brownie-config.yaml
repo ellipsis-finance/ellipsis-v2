@@ -5,3 +5,5 @@ compiler:
   solc:
     remappings:
       - "@openzeppelin=OpenZeppelin/openzeppelin-contracts@4.5.0"
+
+autofetch_sources: true
