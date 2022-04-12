@@ -211,7 +211,7 @@ contract EllipsisLpStaking is ReentrancyGuard {
     function _updatePool(address _token) internal returns (uint256 accRewardPerShare) {
         PoolInfo storage pool = poolInfo[_token];
         uint256 lastRewardTime = pool.lastRewardTime;
-        require(lastRewardTime > 0);
+        require(lastRewardTime > 0, "Invalid pool");
         if (block.timestamp <= lastRewardTime) {
             return pool.accRewardPerShare;
         }
